@@ -66,6 +66,9 @@ class SmartReminderSensor(SmartReminderEntity, SensorEntity):
             "next_trigger": reminder.next_trigger.isoformat()
             if reminder.next_trigger
             else None,
+            "cron_anchor": reminder.cron_anchor.isoformat()
+            if reminder.cron_anchor
+            else None,
             "last_triggered_at": reminder.last_triggered_at.isoformat()
             if reminder.last_triggered_at
             else None,

@@ -414,6 +414,7 @@ class ReminderManager:
             "occurred_at": datetime_to_iso(occurred_at),
             "scheduled_for": datetime_to_iso(scheduled_for),
             "next_trigger": datetime_to_iso(reminder.next_trigger),
+            "cron_anchor": datetime_to_iso(reminder.cron_anchor),
         }
 
     async def _async_save(self) -> None:

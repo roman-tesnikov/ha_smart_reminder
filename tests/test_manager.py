@@ -167,6 +167,26 @@ def test_snooze_persists_new_time_and_fires_event(
     assert manager.hass.bus.events[0][1]["duration"] == "1h30m"
 
 
+def test_updating_cron_anchor_recalculates_next_trigger(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Changing only the anchor must not preserve the previous runtime schedule."""
+    monkeypatch.setattr(manager_module, "utcnow", lambda: NOW)
+    zone = ZoneInfo("Europe/Moscow")
+    payload = reminder_payload(
+        reminder_type="cron",
+        cron="@every 2w 0 10 * * 1",
+    )
+    reminder = Reminder.from_payload(payload, now=NOW, local_tz=zone)
+    manager = lifecycle_manager(reminder)
+
+    updated_payload = {**payload, "cron_anchor": "2026-07-27"}
+    updated = asyncio.run(manager.async_update(reminder.id, updated_payload))
+
+    assert updated.cron_anchor == datetime(2026, 7, 26, 21, 0, tzinfo=UTC)
+    assert updated.next_trigger == datetime(2026, 7, 27, 7, 0, tzinfo=UTC)
+
+
 def test_completing_once_deletes_reminder_after_persisting_event_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

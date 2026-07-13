@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta, tzinfo
+from datetime import UTC, datetime, time, timedelta, tzinfo
 from typing import Any
 
 from croniter import CroniterBadCronError, croniter
@@ -63,6 +63,15 @@ def parse_optional_datetime(
     if value in (None, ""):
         return None
     return parse_datetime(value, local_tz, field_name)
+
+
+def parse_cron_anchor(value: Any, local_tz: tzinfo) -> datetime | None:
+    """Parse an optional cron anchor and normalize it to a local calendar date."""
+    parsed = parse_optional_datetime(value, local_tz, "cron_anchor")
+    if parsed is None:
+        return None
+    local_day = parsed.astimezone(local_tz).date()
+    return datetime.combine(local_day, time.min, tzinfo=local_tz).astimezone(UTC)
 
 
 def validate_reminder_id(value: Any) -> str:
@@ -170,19 +179,35 @@ def next_cron_occurrence(
     if len(cron_expression.split()) != 5:
         raise ReminderValidationError("cron must contain exactly 5 fields")
     try:
-        iterator = croniter(cron_expression, after.astimezone(local_tz))
-        result = iterator.get_next(datetime)
+        anchor_date = None
         if week_match and anchor is not None:
             anchor_date = anchor.astimezone(local_tz).date()
+            anchor_start = datetime.combine(
+                anchor_date, time.min, tzinfo=local_tz
+            ) - timedelta(microseconds=1)
+            first_on_anchor = croniter(cron_expression, anchor_start).get_next(datetime)
+            if first_on_anchor.date() != anchor_date:
+                raise ReminderValidationError(
+                    "cron_anchor must be a date matched by the cron expression"
+                )
+
+        iterator = croniter(cron_expression, after.astimezone(local_tz))
+        result = iterator.get_next(datetime)
+        if week_match and anchor_date is not None:
             interval_days = week_interval * 7
             for _ in range(10000):
-                if (result.date() - anchor_date).days % interval_days == 0:
+                if (
+                    result.date() >= anchor_date
+                    and (result.date() - anchor_date).days % interval_days == 0
+                ):
                     break
                 result = iterator.get_next(datetime)
             else:
                 raise ReminderValidationError(
                     "cron week interval did not produce an occurrence"
                 )
+    except ReminderValidationError:
+        raise
     except (CroniterBadCronError, ValueError, KeyError) as err:
         raise ReminderValidationError("cron is not a valid crontab expression") from err
     if result.tzinfo is None:
@@ -222,6 +247,7 @@ class Reminder:
             self.reminder_type,
             self.scheduled_at,
             self.cron,
+            self.cron_anchor,
             self.delay_minutes,
         )
 
@@ -272,9 +298,20 @@ class Reminder:
         delay_minutes: int | None = None
         if reminder_type is ReminderType.CRON:
             cron = _required_string(payload, "cron")
-            next_trigger = next_cron_occurrence(cron, now, local_tz)
-            if CRON_WEEK_INTERVAL_PATTERN.fullmatch(cron):
-                cron_anchor = next_trigger
+            week_match = CRON_WEEK_INTERVAL_PATTERN.fullmatch(cron)
+            requested_anchor = parse_cron_anchor(payload.get("cron_anchor"), local_tz)
+            if week_match is None:
+                if requested_anchor is not None:
+                    raise ReminderValidationError(
+                        "cron_anchor can only be used with an @every Nw schedule"
+                    )
+                next_trigger = next_cron_occurrence(cron, now, local_tz)
+            else:
+                cron_anchor = requested_anchor
+                if cron_anchor is None:
+                    first_trigger = next_cron_occurrence(cron, now, local_tz)
+                    cron_anchor = parse_cron_anchor(first_trigger, local_tz)
+                next_trigger = next_cron_occurrence(cron, now, local_tz, cron_anchor)
         else:
             scheduled_at = parse_datetime(
                 payload.get("scheduled_at"), local_tz, "scheduled_at"
@@ -310,15 +347,15 @@ class Reminder:
     ) -> Reminder:
         """Restore a reminder, validating both configuration and runtime data."""
         reminder = cls.from_payload(payload, now=now, local_tz=local_tz)
-        reminder.cron_anchor = parse_optional_datetime(
-            payload.get("cron_anchor"), local_tz, "cron_anchor"
-        )
+        reminder.cron_anchor = parse_cron_anchor(payload.get("cron_anchor"), local_tz)
         if (
             reminder.reminder_type is ReminderType.CRON
             and CRON_WEEK_INTERVAL_PATTERN.fullmatch(reminder.cron or "")
             and reminder.cron_anchor is None
         ):
-            reminder.cron_anchor = reminder.next_trigger
+            reminder.cron_anchor = parse_cron_anchor(
+                payload.get("next_trigger"), local_tz
+            ) or parse_cron_anchor(reminder.next_trigger, local_tz)
         try:
             reminder.status = ReminderStatus(
                 payload.get("status", ReminderStatus.SCHEDULED)

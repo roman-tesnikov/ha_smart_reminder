@@ -71,6 +71,50 @@ def test_extended_cron_supports_every_second_week() -> None:
     assert next_run == datetime(2026, 7, 27, 7, 0, tzinfo=UTC)
 
 
+def test_extended_cron_accepts_explicit_anchor_date() -> None:
+    """A user-selected anchor controls the phase of a multi-week schedule."""
+    reminder = Reminder.from_payload(
+        reminder_payload(
+            reminder_type="cron",
+            cron="@every 2w 0 10 * * 1",
+            cron_anchor="2026-07-27",
+        ),
+        now=NOW,
+        local_tz=MOSCOW,
+    )
+
+    assert reminder.cron_anchor == datetime(2026, 7, 26, 21, 0, tzinfo=UTC)
+    assert reminder.next_trigger == datetime(2026, 7, 27, 7, 0, tzinfo=UTC)
+
+
+def test_standard_cron_rejects_anchor_date() -> None:
+    """An anchor has no defined meaning without the @every Nw extension."""
+    with pytest.raises(ReminderValidationError, match="@every Nw"):
+        Reminder.from_payload(
+            reminder_payload(
+                reminder_type="cron",
+                cron="0 10 * * 1",
+                cron_anchor="2026-07-27",
+            ),
+            now=NOW,
+            local_tz=MOSCOW,
+        )
+
+
+def test_anchor_date_must_match_base_cron() -> None:
+    """A Tuesday cannot anchor a schedule whose base cron only runs on Mondays."""
+    with pytest.raises(ReminderValidationError, match="cron_anchor"):
+        Reminder.from_payload(
+            reminder_payload(
+                reminder_type="cron",
+                cron="@every 2w 0 10 * * 1",
+                cron_anchor="2026-07-28",
+            ),
+            now=NOW,
+            local_tz=MOSCOW,
+        )
+
+
 def test_storage_round_trip_preserves_runtime_state() -> None:
     """Persistent state survives a complete serialize/restore cycle."""
     reminder = Reminder.from_payload(reminder_payload(), now=NOW, local_tz=MOSCOW)

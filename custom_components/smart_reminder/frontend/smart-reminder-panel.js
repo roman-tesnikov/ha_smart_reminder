@@ -235,6 +235,7 @@ class SmartReminderPanel extends HTMLElement {
         }
         textarea { min-height: 78px; resize: vertical; }
         input:disabled { color: var(--disabled-text-color); background: var(--secondary-background-color); }
+        .datetime-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, .55fr); gap: 9px; }
         .hint { color: var(--secondary-text-color); font-size: 12px; line-height: 1.4; }
         .check { display: flex; align-items: center; gap: 9px; min-height: 42px; }
         .check input { width: 19px; min-height: 19px; accent-color: var(--primary-color); }
@@ -298,14 +299,22 @@ class SmartReminderPanel extends HTMLElement {
               </select>
             </div>
             <div class="field conditional" data-for="datetime">
-              <label for="scheduled-at">Дата и время первого запуска</label>
-              <input id="scheduled-at" name="scheduled_at" type="datetime-local">
+              <label for="scheduled-date">Дата и время первого запуска</label>
+              <div class="datetime-fields">
+                <input id="scheduled-date" name="scheduled_date" inputmode="numeric" maxlength="10" pattern="[0-9]{2}\\.[0-9]{2}\\.[0-9]{4}" placeholder="ДД.ММ.ГГГГ" aria-label="Дата первого запуска">
+                <input id="scheduled-time" name="scheduled_time" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="ЧЧ:ММ" aria-label="Время первого запуска">
+              </div>
               <span class="hint" id="timezone-hint"></span>
             </div>
             <div class="field conditional" data-for="cron" hidden>
               <label for="cron">Crontab</label>
               <input id="cron" name="cron" placeholder="0 10 * * 1">
               <span class="hint">5 полей: минуты, часы, день месяца, месяц, день недели. Для раза в N недель: @every Nw CRON.</span>
+            </div>
+            <div class="field conditional" data-for="cron" hidden>
+              <label for="cron-anchor-date">Якорная дата</label>
+              <input id="cron-anchor-date" name="cron_anchor_date" inputmode="numeric" maxlength="10" pattern="[0-9]{2}\\.[0-9]{2}\\.[0-9]{4}" placeholder="ДД.ММ.ГГГГ">
+              <span class="hint">Для @every Nw: задаёт первый день цикла, например 27.07.2026. Дата должна соответствовать дню запуска cron.</span>
             </div>
             <div class="field conditional" data-for="delay" hidden>
               <label for="delay">Задержка после выполнения, мин</label>
@@ -481,10 +490,15 @@ class SmartReminderPanel extends HTMLElement {
     idInput.value = reminder ? reminder.id : `reminder_${Date.now().toString(36)}`;
     this.shadowRoot.getElementById("name").value = reminder ? reminder.name : "";
     this.shadowRoot.getElementById("type").value = reminder ? reminder.reminder_type : "once";
-    this.shadowRoot.getElementById("scheduled-at").value = this._formatForInput(
+    const scheduled = this._formatForForm(
       reminder && reminder.scheduled_at ? reminder.scheduled_at : new Date(Date.now() + 3600000).toISOString(),
     );
+    this.shadowRoot.getElementById("scheduled-date").value = scheduled.date;
+    this.shadowRoot.getElementById("scheduled-time").value = scheduled.time;
     this.shadowRoot.getElementById("cron").value = reminder && reminder.cron ? reminder.cron : "0 10 * * 1";
+    this.shadowRoot.getElementById("cron-anchor-date").value = reminder && reminder.cron_anchor
+      ? this._formatDateOnly(reminder.cron_anchor)
+      : "";
     this.shadowRoot.getElementById("delay").value = reminder && reminder.delay_minutes ? reminder.delay_minutes : 1440;
     this.shadowRoot.getElementById("repeat").value = reminder ? reminder.repeat_interval_minutes : 15;
     this.shadowRoot.getElementById("snooze").value = reminder ? reminder.default_snooze_minutes : 30;
@@ -507,12 +521,27 @@ class SmartReminderPanel extends HTMLElement {
 
   _updateConditionalFields() {
     const type = this.shadowRoot.getElementById("type").value;
-    this.shadowRoot.querySelector('[data-for="datetime"]').hidden = type === "cron";
-    this.shadowRoot.querySelector('[data-for="cron"]').hidden = type !== "cron";
+    this.shadowRoot.querySelectorAll('[data-for="datetime"]').forEach((element) => {
+      element.hidden = type === "cron";
+    });
+    this.shadowRoot.querySelectorAll('[data-for="cron"]').forEach((element) => {
+      element.hidden = type !== "cron";
+    });
     this.shadowRoot.querySelector('[data-for="delay"]').hidden = type !== "after_completion";
-    this.shadowRoot.getElementById("scheduled-at").required = type !== "cron";
-    this.shadowRoot.getElementById("cron").required = type === "cron";
-    this.shadowRoot.getElementById("delay").required = type === "after_completion";
+    const scheduledDate = this.shadowRoot.getElementById("scheduled-date");
+    const scheduledTime = this.shadowRoot.getElementById("scheduled-time");
+    const cron = this.shadowRoot.getElementById("cron");
+    const cronAnchor = this.shadowRoot.getElementById("cron-anchor-date");
+    const delay = this.shadowRoot.getElementById("delay");
+    scheduledDate.required = type !== "cron";
+    scheduledDate.disabled = type === "cron";
+    scheduledTime.required = type !== "cron";
+    scheduledTime.disabled = type === "cron";
+    cron.required = type === "cron";
+    cron.disabled = type !== "cron";
+    cronAnchor.disabled = type !== "cron";
+    delay.required = type === "after_completion";
+    delay.disabled = type !== "after_completion";
   }
 
   async _save(event) {
@@ -520,6 +549,24 @@ class SmartReminderPanel extends HTMLElement {
     const form = event.currentTarget;
     if (!form.reportValidity()) return;
     const type = form.elements.reminder_type.value;
+    const error = this.shadowRoot.getElementById("form-error");
+    error.textContent = "";
+    let scheduledAt = null;
+    let cronAnchor = null;
+    try {
+      if (type !== "cron") {
+        scheduledAt = this._parseDateTime(
+          form.elements.scheduled_date.value,
+          form.elements.scheduled_time.value,
+        );
+      }
+      if (type === "cron" && form.elements.cron_anchor_date.value.trim()) {
+        cronAnchor = this._parseDate(form.elements.cron_anchor_date.value);
+      }
+    } catch (exception) {
+      error.textContent = this._errorMessage(exception);
+      return;
+    }
     const recipients = form.elements.recipient_ids.value
       .split(/[\n,]+/)
       .map((value) => value.trim())
@@ -529,8 +576,9 @@ class SmartReminderPanel extends HTMLElement {
       name: form.elements.name.value.trim(),
       enabled: form.elements.enabled.checked,
       reminder_type: type,
-      scheduled_at: type === "cron" ? null : form.elements.scheduled_at.value,
+      scheduled_at: scheduledAt,
       cron: type === "cron" ? form.elements.cron.value.trim() : null,
+      cron_anchor: cronAnchor,
       delay_minutes: type === "after_completion" ? Number(form.elements.delay_minutes.value) : null,
       ignore_dnd: form.elements.ignore_dnd.checked,
       repeat_interval_minutes: Number(form.elements.repeat_interval_minutes.value),
@@ -541,9 +589,7 @@ class SmartReminderPanel extends HTMLElement {
       recipient_ids: recipients,
     };
     const save = this.shadowRoot.getElementById("save");
-    const error = this.shadowRoot.getElementById("form-error");
     save.disabled = true;
-    error.textContent = "";
     try {
       if (this._editingId) {
         await this._send("update", { reminder_id: this._editingId, reminder });
@@ -564,25 +610,31 @@ class SmartReminderPanel extends HTMLElement {
   }
 
   _formatDate(value) {
-    if (!value) return "—";
-    try {
-      return new Intl.DateTimeFormat(this._hass?.locale?.language || "ru", {
-        timeZone: this._settings.timezone,
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(new Date(value));
-    } catch (_) {
-      return new Date(value).toLocaleString();
-    }
+    const parts = this._dateTimeParts(value);
+    return parts
+      ? `${parts.day}.${parts.month}.${parts.year}, ${parts.hour}:${parts.minute}`
+      : "—";
   }
 
-  _formatForInput(value) {
+  _formatDateOnly(value) {
+    const parts = this._dateTimeParts(value);
+    return parts ? `${parts.day}.${parts.month}.${parts.year}` : "";
+  }
+
+  _formatForForm(value) {
+    const parts = this._dateTimeParts(value);
+    if (!parts) return { date: "", time: "" };
+    return {
+      date: `${parts.day}.${parts.month}.${parts.year}`,
+      time: `${parts.hour}:${parts.minute}`,
+    };
+  }
+
+  _dateTimeParts(value) {
     const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
     try {
-      const parts = new Intl.DateTimeFormat("en-CA", {
+      const parts = new Intl.DateTimeFormat("en-GB", {
         timeZone: this._settings.timezone,
         year: "numeric",
         month: "2-digit",
@@ -594,11 +646,41 @@ class SmartReminderPanel extends HTMLElement {
         result[part.type] = part.value;
         return result;
       }, {});
-      return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+      return parts;
     } catch (_) {
-      const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-      return local.toISOString().slice(0, 16);
+      const pad = (number) => String(number).padStart(2, "0");
+      return {
+        year: String(date.getFullYear()),
+        month: pad(date.getMonth() + 1),
+        day: pad(date.getDate()),
+        hour: pad(date.getHours()),
+        minute: pad(date.getMinutes()),
+      };
     }
+  }
+
+  _parseDate(value) {
+    const match = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(value.trim());
+    if (!match) throw new Error("Дата должна быть указана в формате ДД.ММ.ГГГГ");
+    const [, day, month, year] = match;
+    const validationDate = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+    if (
+      validationDate.getUTCFullYear() !== Number(year)
+      || validationDate.getUTCMonth() !== Number(month) - 1
+      || validationDate.getUTCDate() !== Number(day)
+    ) {
+      throw new Error("Указана несуществующая календарная дата");
+    }
+    return `${year}-${month}-${day}`;
+  }
+
+  _parseDateTime(dateValue, timeValue) {
+    const date = this._parseDate(dateValue);
+    const time = timeValue.trim();
+    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+      throw new Error("Время должно быть указано в 24-часовом формате ЧЧ:ММ");
+    }
+    return `${date}T${time}`;
   }
 
   _minutesToDuration(value) {
