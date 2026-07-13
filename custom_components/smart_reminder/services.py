@@ -108,6 +108,7 @@ async def async_register_services(hass: HomeAssistant) -> None:
             "default_snooze_minutes": call.data[ATTR_DEFAULT_SNOOZE_MINUTES],
             "first_text": text,
             "repeat_text": "",
+            "snoozed_text": "",
             "completed_text": "",
             "recipient_ids": call.data[ATTR_RECIPIENT_IDS],
         }

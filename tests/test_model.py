@@ -31,6 +31,7 @@ def reminder_payload(**overrides: object) -> dict[str, object]:
         "default_snooze_minutes": 90,
         "first_text": "Water the cactus",
         "repeat_text": "The cactus is still waiting",
+        "snoozed_text": "The cactus is waiting after snooze",
         "completed_text": "Thank you",
         "recipient_ids": ["123", "family"],
     }
@@ -46,6 +47,7 @@ def test_one_time_payload_uses_home_assistant_timezone() -> None:
     assert reminder.status is ReminderStatus.SCHEDULED
     assert reminder.next_trigger == datetime(2026, 7, 13, 7, 0, tzinfo=UTC)
     assert reminder.recipient_ids == ["123", "family"]
+    assert reminder.snoozed_text == "The cactus is waiting after snooze"
 
 
 def test_cron_schedule_respects_timezone() -> None:
@@ -129,6 +131,18 @@ def test_storage_round_trip_preserves_runtime_state() -> None:
     assert restored.next_trigger == reminder.next_trigger
     assert restored.last_triggered_at == NOW
     assert restored.repeat_count == 3
+    assert restored.snoozed_text == reminder.snoozed_text
+
+
+def test_old_storage_without_snoozed_text_remains_compatible() -> None:
+    """Existing reminders receive an empty optional snoozed text after upgrade."""
+    reminder = Reminder.from_payload(reminder_payload(), now=NOW, local_tz=MOSCOW)
+    stored = reminder.to_dict()
+    del stored["snoozed_text"]
+
+    restored = Reminder.from_storage(stored, now=NOW, local_tz=MOSCOW)
+
+    assert restored.snoozed_text == ""
 
 
 @pytest.mark.parametrize(

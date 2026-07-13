@@ -344,6 +344,11 @@ class SmartReminderPanel extends HTMLElement {
               <span class="hint">Если пусто, используется текст первого напоминания.</span>
             </div>
             <div class="field full">
+              <label for="snoozed-text">Текст отложенного напоминания</label>
+              <textarea id="snoozed-text" name="snoozed_text"></textarea>
+              <span class="hint">Используется при срабатывании после мьюта. Если пусто, используется текст повторного, затем первого напоминания.</span>
+            </div>
+            <div class="field full">
               <label for="completed-text">Текст выполненного напоминания</label>
               <textarea id="completed-text" name="completed_text"></textarea>
             </div>
@@ -506,6 +511,7 @@ class SmartReminderPanel extends HTMLElement {
     this.shadowRoot.getElementById("ignore-dnd").checked = reminder ? reminder.ignore_dnd : false;
     this.shadowRoot.getElementById("first-text").value = reminder ? reminder.first_text : "";
     this.shadowRoot.getElementById("repeat-text").value = reminder ? reminder.repeat_text || "" : "";
+    this.shadowRoot.getElementById("snoozed-text").value = reminder ? reminder.snoozed_text || "" : "";
     this.shadowRoot.getElementById("completed-text").value = reminder ? reminder.completed_text || "" : "";
     this.shadowRoot.getElementById("recipients").value = reminder ? (reminder.recipient_ids || []).join("\n") : "";
     this.shadowRoot.getElementById("timezone-hint").textContent = `Часовой пояс: ${this._settings.timezone || "Home Assistant"}`;
@@ -585,6 +591,7 @@ class SmartReminderPanel extends HTMLElement {
       default_snooze_minutes: Number(form.elements.default_snooze_minutes.value),
       first_text: form.elements.first_text.value.trim(),
       repeat_text: form.elements.repeat_text.value.trim(),
+      snoozed_text: form.elements.snoozed_text.value.trim(),
       completed_text: form.elements.completed_text.value.trim(),
       recipient_ids: recipients,
     };

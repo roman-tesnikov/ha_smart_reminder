@@ -60,6 +60,7 @@ def reminder_payload(**overrides: object) -> dict[str, object]:
         "default_snooze_minutes": 30,
         "first_text": "First text",
         "repeat_text": "Repeat text",
+        "snoozed_text": "Snoozed text",
         "completed_text": "Completed text",
         "recipient_ids": ["123"],
     }
@@ -132,7 +133,7 @@ def test_due_reminder_becomes_active_and_fires_first_event(
     assert manager._store.saved[-1]["reminders"][0]["status"] == "active"
 
 
-def test_snoozed_wakeup_uses_repeat_event_and_text(
+def test_snoozed_wakeup_uses_repeat_event_and_snoozed_text(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(manager_module, "utcnow", lambda: NOW)
@@ -146,8 +147,53 @@ def test_snoozed_wakeup_uses_repeat_event_and_text(
     asyncio.run(manager.async_process_due())
 
     assert manager.hass.bus.events[0][0] == EVENT_REPEATED
-    assert manager.hass.bus.events[0][1]["text"] == "Repeat text"
+    assert manager.hass.bus.events[0][1]["text"] == "Snoozed text"
     assert reminder.repeat_count == 1
+
+
+@pytest.mark.parametrize(
+    ("snoozed_text", "repeat_text", "expected"),
+    [
+        ("", "Repeat text", "Repeat text"),
+        ("", "", "First text"),
+    ],
+)
+def test_snoozed_text_falls_back_to_repeat_then_first_text(
+    monkeypatch: pytest.MonkeyPatch,
+    snoozed_text: str,
+    repeat_text: str,
+    expected: str,
+) -> None:
+    monkeypatch.setattr(manager_module, "utcnow", lambda: NOW)
+    reminder = Reminder.from_payload(
+        reminder_payload(snoozed_text=snoozed_text, repeat_text=repeat_text),
+        now=NOW - timedelta(days=1),
+        local_tz=ZoneInfo("UTC"),
+    )
+    reminder.status = ReminderStatus.SNOOZED
+    reminder.next_trigger = NOW - timedelta(minutes=1)
+    manager = lifecycle_manager(reminder)
+
+    asyncio.run(manager.async_process_due())
+
+    assert manager.hass.bus.events[0][1]["text"] == expected
+
+
+def test_normal_repeat_does_not_use_snoozed_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(manager_module, "utcnow", lambda: NOW)
+    reminder = Reminder.from_payload(
+        reminder_payload(), now=NOW - timedelta(days=1), local_tz=ZoneInfo("UTC")
+    )
+    reminder.status = ReminderStatus.ACTIVE
+    reminder.next_trigger = NOW - timedelta(minutes=1)
+    manager = lifecycle_manager(reminder)
+
+    asyncio.run(manager.async_process_due())
+
+    assert manager.hass.bus.events[0][0] == EVENT_REPEATED
+    assert manager.hass.bus.events[0][1]["text"] == "Repeat text"
 
 
 def test_snooze_persists_new_time_and_fires_event(
@@ -200,9 +246,34 @@ def test_completing_once_deletes_reminder_after_persisting_event_data(
     asyncio.run(manager.async_complete(reminder.id))
 
     assert reminder.id not in manager.reminders
+    assert len(manager.hass.bus.events) == 1
     assert manager.hass.bus.events[0][0] == EVENT_COMPLETED
     assert manager.hass.bus.events[0][1]["text"] == "Completed text"
+    assert manager.hass.bus.events[0][1]["reminder_id"] == reminder.id
     assert manager._store.saved[-1]["reminders"] == []
+
+
+def test_completing_once_with_empty_text_still_fires_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty completion message must not suppress the lifecycle event."""
+    monkeypatch.setattr(manager_module, "utcnow", lambda: NOW)
+    reminder = Reminder.from_payload(
+        reminder_payload(completed_text=""),
+        now=NOW - timedelta(days=1),
+        local_tz=ZoneInfo("UTC"),
+    )
+    reminder.status = ReminderStatus.ACTIVE
+    manager = lifecycle_manager(reminder)
+
+    asyncio.run(manager.async_complete(reminder.id))
+
+    assert len(manager.hass.bus.events) == 1
+    event_type, event_data = manager.hass.bus.events[0]
+    assert event_type == EVENT_COMPLETED
+    assert event_data["reminder_id"] == reminder.id
+    assert event_data["text"] == ""
+    assert reminder.id not in manager.reminders
 
 
 def test_completing_after_completion_schedules_from_actual_completion(

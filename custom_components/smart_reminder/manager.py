@@ -332,16 +332,22 @@ class ReminderManager:
                     continue
 
                 scheduled_for = reminder.next_trigger
-                is_repeat = reminder.status in (
+                previous_status = reminder.status
+                is_repeat = previous_status in (
                     ReminderStatus.ACTIVE,
                     ReminderStatus.SNOOZED,
                 )
                 event_type = EVENT_REPEATED if is_repeat else EVENT_TRIGGERED
-                text = (
-                    reminder.repeat_text or reminder.first_text
-                    if is_repeat
-                    else reminder.first_text
-                )
+                if previous_status is ReminderStatus.SNOOZED:
+                    text = (
+                        reminder.snoozed_text
+                        or reminder.repeat_text
+                        or reminder.first_text
+                    )
+                elif is_repeat:
+                    text = reminder.repeat_text or reminder.first_text
+                else:
+                    text = reminder.first_text
                 reminder.status = ReminderStatus.ACTIVE
                 reminder.last_triggered_at = now
                 reminder.repeat_count = reminder.repeat_count + 1 if is_repeat else 0

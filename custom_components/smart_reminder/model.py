@@ -228,6 +228,7 @@ class Reminder:
     default_snooze_minutes: int
     first_text: str
     repeat_text: str
+    snoozed_text: str
     completed_text: str
     recipient_ids: list[str]
     scheduled_at: datetime | None = None
@@ -267,6 +268,7 @@ class Reminder:
             "default_snooze_minutes": self.default_snooze_minutes,
             "first_text": self.first_text,
             "repeat_text": self.repeat_text,
+            "snoozed_text": self.snoozed_text,
             "completed_text": self.completed_text,
             "recipient_ids": list(self.recipient_ids),
             "status": self.status.value,
@@ -336,6 +338,7 @@ class Reminder:
             default_snooze_minutes=_positive_int(payload, "default_snooze_minutes", 30),
             first_text=_required_string(payload, "first_text"),
             repeat_text=_optional_string(payload, "repeat_text"),
+            snoozed_text=_optional_string(payload, "snoozed_text"),
             completed_text=_optional_string(payload, "completed_text"),
             recipient_ids=_recipient_ids(payload),
             next_trigger=next_trigger,
