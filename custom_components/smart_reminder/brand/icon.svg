@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Smart Reminder</title>
+  <defs>
+    <linearGradient id="background" x1="96" y1="72" x2="416" y2="440" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5AC8FA"/>
+      <stop offset="1" stop-color="#168BD2"/>
+    </linearGradient>
+  </defs>
+  <circle cx="256" cy="256" r="236" fill="url(#background)"/>
+  <path
+    d="M153 317h206c-22-24-31-48-31-91 0-43-24-80-60-93v-10c0-12-10-22-22-22s-22 10-22 22v10c-36 13-60 50-60 93 0 43-9 67-31 91h20Z"
+    fill="#FFFFFF"
+  />
+  <path d="M210 345h92c-4 28-23 48-46 48s-42-20-46-48Z" fill="#FFFFFF"/>
+  <circle cx="331" cy="312" r="73" fill="#114B72" stroke="#FFFFFF" stroke-width="14"/>
+  <path
+    d="m297 312 23 24 48-52"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="18"
+  />
+</svg>
