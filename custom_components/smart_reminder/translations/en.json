@@ -1,0 +1,61 @@
+{
+  "title": "Smart Reminder",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Smart Reminder",
+        "description": "Configure the global Do Not Disturb period. Reminders can individually ignore it.",
+        "data": {
+          "dnd_start": "Do Not Disturb starts",
+          "dnd_end": "Do Not Disturb ends"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Smart Reminder is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Reminder settings",
+        "description": "Reminders due during this period are postponed until the period ends, unless Ignore DnD is enabled for that reminder. Equal start and end times disable DnD.",
+        "data": {
+          "dnd_start": "Do Not Disturb starts",
+          "dnd_end": "Do Not Disturb ends"
+        }
+      }
+    }
+  },
+  "services": {
+    "create": {
+      "name": "Create reminder",
+      "description": "Create a simple one-time reminder.",
+      "fields": {
+        "reminder_id": { "name": "ID", "description": "Optional stable ID. One is generated when omitted." },
+        "name": { "name": "Name", "description": "Optional display name. The text is used when omitted." },
+        "at": { "name": "Date and time", "description": "When the reminder should first trigger." },
+        "text": { "name": "Text", "description": "Text sent with the reminder event." },
+        "recipient_ids": { "name": "Recipient IDs", "description": "Arbitrary recipient IDs copied to each event." },
+        "ignore_dnd": { "name": "Ignore DnD", "description": "Allow triggering during the global quiet period." },
+        "repeat_interval_minutes": { "name": "Repeat interval", "description": "Minutes between notifications until completion." },
+        "default_snooze_minutes": { "name": "Default snooze", "description": "Default snooze duration in minutes." }
+      }
+    },
+    "snooze": {
+      "name": "Snooze reminder",
+      "description": "Postpone a reminder by a compact duration such as 1h30m.",
+      "fields": {
+        "reminder_id": { "name": "Reminder ID", "description": "ID of the reminder to snooze." },
+        "duration": { "name": "Duration", "description": "Combination of days, hours and minutes, for example 2d3h15m." }
+      }
+    },
+    "complete": {
+      "name": "Complete reminder",
+      "description": "Complete a reminder and schedule its next occurrence or delete a one-time reminder.",
+      "fields": {
+        "reminder_id": { "name": "Reminder ID", "description": "ID of the reminder to complete." }
+      }
+    }
+  }
+}

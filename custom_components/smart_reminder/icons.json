@@ -1,0 +1,7 @@
+{
+  "services": {
+    "create": { "service": "mdi:bell-plus-outline" },
+    "snooze": { "service": "mdi:bell-sleep-outline" },
+    "complete": { "service": "mdi:check-circle-outline" }
+  }
+}

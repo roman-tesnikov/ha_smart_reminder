@@ -1,0 +1,68 @@
+create:
+  fields:
+    reminder_id:
+      example: take_out_trash
+      selector:
+        text:
+    name:
+      example: Take out the trash
+      selector:
+        text:
+    at:
+      required: true
+      example: "2026-07-14 22:00:00"
+      selector:
+        datetime:
+    text:
+      required: true
+      example: Take out the trash
+      selector:
+        text:
+          multiline: true
+    recipient_ids:
+      example:
+        - "123456789"
+      selector:
+        text:
+          multiple: true
+    ignore_dnd:
+      default: false
+      selector:
+        boolean:
+    repeat_interval_minutes:
+      default: 15
+      selector:
+        number:
+          min: 1
+          max: 10080
+          mode: box
+          unit_of_measurement: min
+    default_snooze_minutes:
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 10080
+          mode: box
+          unit_of_measurement: min
+
+snooze:
+  fields:
+    reminder_id:
+      required: true
+      example: take_out_trash
+      selector:
+        text:
+    duration:
+      required: true
+      example: 1h30m
+      selector:
+        text:
+
+complete:
+  fields:
+    reminder_id:
+      required: true
+      example: take_out_trash
+      selector:
+        text:

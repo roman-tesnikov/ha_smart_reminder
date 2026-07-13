@@ -1,0 +1,14 @@
+{
+  "domain": "smart_reminder",
+  "name": "Smart Reminder",
+  "codeowners": ["@roman-tesnikov"],
+  "config_flow": true,
+  "dependencies": ["frontend", "http", "panel_custom", "websocket_api"],
+  "documentation": "https://github.com/roman-tesnikov/ha_smart_reminder",
+  "integration_type": "helper",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/roman-tesnikov/ha_smart_reminder/issues",
+  "requirements": ["croniter==6.2.3"],
+  "single_config_entry": true,
+  "version": "1.0.0"
+}
