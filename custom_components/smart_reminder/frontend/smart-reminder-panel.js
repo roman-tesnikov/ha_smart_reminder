@@ -451,6 +451,7 @@ class SmartReminderPanel extends HTMLElement {
   _actions(reminder) {
     return `
       <button class="icon" data-action="edit" data-id="${reminder.id}" title="Редактировать"><ha-icon icon="mdi:pencil-outline"></ha-icon></button>
+      <button class="icon" data-action="duplicate" data-id="${reminder.id}" title="Дублировать"><ha-icon icon="mdi:content-copy"></ha-icon></button>
       <button class="icon" data-action="snooze" data-id="${reminder.id}" title="Отложить"><ha-icon icon="mdi:bell-sleep-outline"></ha-icon></button>
       <button class="icon" data-action="complete" data-id="${reminder.id}" title="Выполнить"><ha-icon icon="mdi:check-circle-outline"></ha-icon></button>
       <button class="icon danger" data-action="delete" data-id="${reminder.id}" title="Удалить"><ha-icon icon="mdi:delete-outline"></ha-icon></button>`;
@@ -464,6 +465,10 @@ class SmartReminderPanel extends HTMLElement {
     const action = button.dataset.action;
     if (action === "edit") {
       this._openEditor(reminder);
+      return;
+    }
+    if (action === "duplicate") {
+      this._openEditor(reminder, true);
       return;
     }
     if (action === "delete" && !window.confirm(`Удалить «${reminder.name}»?`)) return;
@@ -495,19 +500,26 @@ class SmartReminderPanel extends HTMLElement {
     }
   }
 
-  _openEditor(reminder = null) {
+  _openEditor(reminder = null, duplicate = false) {
     const form = this.shadowRoot.getElementById("form");
     form.reset();
-    this._editingId = reminder && reminder.id;
-    this._editingReminder = reminder;
-    this.shadowRoot.getElementById("dialog-title").textContent = reminder ? "Редактирование" : "Новое напоминание";
+    const editing = Boolean(reminder) && !duplicate;
+    this._editingId = editing ? reminder.id : null;
+    this._editingReminder = editing ? reminder : null;
+    let dialogTitle = "Новое напоминание";
+    if (editing) dialogTitle = "Редактирование";
+    if (duplicate) dialogTitle = "Дублирование напоминания";
+    this.shadowRoot.getElementById("dialog-title").textContent = dialogTitle;
     const idInput = this.shadowRoot.getElementById("id");
-    idInput.disabled = Boolean(reminder);
-    idInput.value = reminder ? reminder.id : `reminder_${Date.now().toString(36)}`;
+    idInput.disabled = editing;
+    idInput.value = editing ? reminder.id : this._generateReminderId();
     this.shadowRoot.getElementById("name").value = reminder ? reminder.name : "";
     this.shadowRoot.getElementById("type").value = reminder ? reminder.reminder_type : "once";
+    const scheduledSource = duplicate
+      ? reminder.next_trigger || reminder.scheduled_at
+      : reminder && reminder.scheduled_at;
     const scheduled = this._formatForForm(
-      reminder && reminder.scheduled_at ? reminder.scheduled_at : new Date(Date.now() + 3600000).toISOString(),
+      scheduledSource || new Date(Date.now() + 3600000).toISOString(),
     );
     this.shadowRoot.getElementById("scheduled-date").value = scheduled.date;
     this.shadowRoot.getElementById("scheduled-time").value = scheduled.time;
@@ -662,6 +674,13 @@ class SmartReminderPanel extends HTMLElement {
 
   _send(command, data) {
     return this._hass.connection.sendMessagePromise({ type: `smart_reminder/${command}`, ...data });
+  }
+
+  _generateReminderId() {
+    const randomPart = globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"
+      ? globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, 12)
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    return `reminder_${randomPart}`;
   }
 
   _formatDate(value) {

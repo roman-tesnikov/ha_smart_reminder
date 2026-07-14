@@ -233,6 +233,28 @@ def test_snooze_persists_new_time_and_fires_event(
     assert manager.hass.bus.events[0][1]["reason"] is None
 
 
+def test_snoozed_reminder_fires_repeated_event_when_delay_expires(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = {"now": NOW}
+    monkeypatch.setattr(manager_module, "utcnow", lambda: clock["now"])
+    reminder = Reminder.from_payload(
+        reminder_payload(), now=NOW - timedelta(days=1), local_tz=ZoneInfo("UTC")
+    )
+    manager = lifecycle_manager(reminder)
+
+    asyncio.run(manager.async_snooze(reminder.id, "30m"))
+    clock["now"] = NOW + timedelta(minutes=30)
+    asyncio.run(manager.async_process_due())
+
+    assert [event_type for event_type, _data in manager.hass.bus.events] == [
+        EVENT_SNOOZED,
+        EVENT_REPEATED,
+    ]
+    assert manager.hass.bus.events[-1][1]["text"] == "Snoozed text"
+    assert reminder.status is ReminderStatus.ACTIVE
+
+
 def test_repeated_snooze_does_not_move_next_trigger(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
