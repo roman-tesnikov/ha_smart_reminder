@@ -210,7 +210,29 @@ def test_snooze_persists_new_time_and_fires_event(
     assert reminder.status is ReminderStatus.SNOOZED
     assert reminder.next_trigger == NOW + timedelta(minutes=90)
     assert manager.hass.bus.events[0][0] == EVENT_SNOOZED
+    assert manager.hass.bus.events[0][1]["text"] == "Snoozed text"
     assert manager.hass.bus.events[0][1]["duration"] == "1h30m"
+
+
+def test_snooze_with_empty_snoozed_text_still_fires_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Automations can substitute their own confirmation when text is empty."""
+    monkeypatch.setattr(manager_module, "utcnow", lambda: NOW)
+    reminder = Reminder.from_payload(
+        reminder_payload(snoozed_text=""),
+        now=NOW - timedelta(days=1),
+        local_tz=ZoneInfo("UTC"),
+    )
+    manager = lifecycle_manager(reminder)
+
+    asyncio.run(manager.async_snooze(reminder.id, "30m"))
+
+    assert len(manager.hass.bus.events) == 1
+    event_type, event_data = manager.hass.bus.events[0]
+    assert event_type == EVENT_SNOOZED
+    assert event_data["text"] == ""
+    assert event_data["duration"] == "30m"
 
 
 def test_updating_cron_anchor_recalculates_next_trigger(

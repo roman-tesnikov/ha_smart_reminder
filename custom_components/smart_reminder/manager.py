@@ -256,7 +256,7 @@ class ReminderManager:
             await self._async_save()
             event_data = self._event_data(
                 reminder,
-                text=reminder.repeat_text or reminder.first_text,
+                text=reminder.snoozed_text,
                 occurred_at=now,
                 scheduled_for=previous_trigger,
             )
