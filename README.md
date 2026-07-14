@@ -193,7 +193,7 @@ reminder_type: once
 status: active
 text: Выбросить мусор
 recipient_ids:
-  - "123456789"
+  - "<telegram_chat_id>"
 ignore_dnd: false
 default_snooze_minutes: 90
 default_snooze_duration: 1h30m
@@ -258,7 +258,7 @@ data:
   at: "2026-07-14 22:00:00"
   text: Выбросить мусор
   recipient_ids:
-    - "123456789"
+    - "<telegram_chat_id>"
   ignore_dnd: false
   repeat_interval_minutes: 15
   default_snooze_minutes: 90
@@ -296,25 +296,28 @@ data:
 
 ## Полный пример с Telegram Bot
 
-Пример ниже рассчитан на актуальную UI-интеграцию
+Пример рассчитан на актуальную UI-интеграцию
 [Telegram bot](https://www.home-assistant.io/integrations/telegram_bot) в HA
-2026.7. Она публикует входящие команды через event-сущность. Замените
-`event.my_telegram_bot` на сущность своего бота. Если настроено несколько ботов,
-добавьте `config_entry_id` в actions `telegram_bot.*`.
+2026.7. Она публикует команды и callback-кнопки через event-сущность. Во всех
+примерах замените `event.my_telegram_bot` на event-сущность своего бота. Если
+настроено несколько ботов, добавьте `config_entry_id` в actions
+`telegram_bot.*`.
 
-### 1. Отправка напоминаний с inline-кнопками
+### 1. Обработка событий Smart Reminder
+
+Автоматизация доставляет первое и повторное напоминания с inline-кнопками, а
+также подтверждения выполнения и откладывания. Значения `recipient_ids`
+интерпретируются как Telegram chat ID.
 
 ```yaml
-alias: Smart Reminder — Telegram delivery
-mode: queued
-max: 20
+alias: Smart Reminder. Обработка событий приложения
 triggers:
   - trigger: event
     event_type: smart_reminder_triggered
-    id: reminder
+    id: triggered
   - trigger: event
     event_type: smart_reminder_repeated
-    id: reminder
+    id: repeated
   - trigger: event
     event_type: smart_reminder_completed
     id: completed
@@ -324,14 +327,16 @@ triggers:
 conditions:
   - condition: template
     value_template: >-
-      {{ trigger.event.data.recipient_ids | default([]) | count > 0 }}
+      {{ trigger.event.data.recipient_ids
+         | default([], true)
+         | count > 0 }}
 actions:
   - variables:
       reminder: "{{ trigger.event.data }}"
   - choose:
       - conditions:
           - condition: template
-            value_template: "{{ trigger.id == 'reminder' }}"
+            value_template: "{{ trigger.id in ['triggered', 'repeated'] }}"
         sequence:
           - action: telegram_bot.send_message
             data:
@@ -340,175 +345,267 @@ actions:
               message: "{{ reminder.text }}"
               inline_keyboard:
                 - >-
-                  Готово:/reminder_done {{ reminder.reminder_id }},
-                  Отложить {{ reminder.default_snooze_duration }}:/reminder_snooze
-                  {{ reminder.reminder_id }} {{ reminder.default_snooze_duration }}
+                  ✅ Готово:/reminder_done:{{ reminder.reminder_id }},
+                  🔕 Отложить:/reminder_snooze:{{ reminder.reminder_id }}:{{
+                  reminder.default_snooze_duration }}
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'completed' }}"
         sequence:
+          - variables:
+              completed_text: >-
+                {{ reminder.text | default('') | string | trim }}
+              formatted_next_trigger: >-
+                {% set value = reminder.next_trigger %}
+                {{ as_timestamp(value)
+                   | timestamp_custom('%d.%m.%Y %H:%M', true)
+                   if value else 'Следующего запуска нет' }}
           - action: telegram_bot.send_message
             data:
               chat_id: "{{ reminder.recipient_ids | map('int') | list }}"
               parse_mode: plain_text
               message: >-
-                {% set text = reminder.text | default('') | string | trim %}
-                {{ text if text else '✅ Напоминание выполнено' }}
+                {{ completed_text
+                   if completed_text
+                   else '✅ Напоминание выполнено' }}.
+                Следующий запуск: {{ formatted_next_trigger }}
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'snoozed' }}"
         sequence:
+          - variables:
+              snoozed_text: >-
+                {{ reminder.text | default('') | string | trim }}
+              formatted_next_trigger: >-
+                {% set value = reminder.next_trigger %}
+                {{ as_timestamp(value)
+                   | timestamp_custom('%d.%m.%Y %H:%M', true)
+                   if value else 'Следующего запуска нет' }}
           - action: telegram_bot.send_message
             data:
               chat_id: "{{ reminder.recipient_ids | map('int') | list }}"
               parse_mode: plain_text
               message: >-
-                {% set text = reminder.text | default('') | string | trim %}
-                {{ text if text else
-                   '🔕 Напоминание отложено на ' ~ reminder.duration }}
-```
-
-### 2. `/reminder_add`, `/reminder_done` и `/reminder_snooze`
-
-Поддерживаемые команды:
-
-```text
-/reminder_add 14.07.2026 22:00 Выбросить мусор
-/reminder_add 22:00 Выбросить мусор
-/reminder_done <id>
-/reminder_snooze <id> 1h30m
-```
-
-Во втором варианте `/reminder_add` используется сегодняшняя дата в часовом
-поясе Home Assistant.
-
-```yaml
-alias: Smart Reminder — Telegram commands
+                {{ snoozed_text
+                   if snoozed_text
+                   else '🔕 Напоминание отложено' }}.
+                Следующий запуск: {{ formatted_next_trigger }}
 mode: queued
 max: 20
+```
+
+### 2. Обработка inline-кнопок Telegram
+
+Callback data использует разделитель `:` и совпадает с командами из первой
+автоматизации.
+
+```yaml
+alias: Smart Reminder. Обработка кнопок Telegram
+description: ""
 triggers:
   - trigger: state
-    entity_id: event.my_telegram_bot  # замените на event-сущность своего бота
+    entity_id:
+      - event.my_telegram_bot
 conditions:
   - condition: template
     value_template: >-
-      {{ trigger.to_state.attributes.event_type in
-         ['telegram_command', 'telegram_callback'] }}
+      {% set event_type =
+        trigger.to_state.attributes.event_type
+        | default('', true)
+        | string %}
+      {% set data =
+        trigger.to_state.attributes.data
+        | default('', true)
+        | string
+        | trim %}
+      {{ event_type == 'telegram_callback'
+         and (data.startswith('/reminder_done:')
+              or data.startswith('/reminder_snooze:')) }}
 actions:
   - variables:
-      update: "{{ trigger.to_state.attributes }}"
-      raw: >-
-        {% if trigger.to_state.attributes.event_type == 'telegram_callback' %}
-          {{ trigger.to_state.attributes.data }}
-        {% else %}
-          {% set args = trigger.to_state.attributes.args | default('') %}
-          {{ trigger.to_state.attributes.command }}
-          {{ args if args is string else args | join(' ') }}
-        {% endif %}
+      callback:
+        id: >-
+          {{ trigger.to_state.attributes.id
+             | default('', true)
+             | string }}
+        data: >-
+          {{ trigger.to_state.attributes.data
+             | default('', true)
+             | string
+             | trim }}
   - variables:
-      tokens: "{{ raw.strip().split() }}"
-      command: "{{ tokens[0] if tokens else '' }}"
+      callback_parts: "{{ callback.data.split(':', 2) }}"
   - variables:
-      argv: "{{ tokens[1:] }}"
+      command: >-
+        {{ callback_parts[0]
+           if callback_parts | count > 0
+           else '' }}
+      reminder_id: >-
+        {{ callback_parts[1] | trim
+           if callback_parts | count > 1
+           else '' }}
+      duration: >-
+        {{ callback_parts[2] | trim
+           if callback_parts | count > 2
+           else '' }}
   - choose:
       - conditions:
           - condition: template
             value_template: >-
-              {% set dated = argv | count > 0 and argv[0].count('.') == 2 %}
-              {{ command == '/reminder_add' and
-                 ((dated and argv | count >= 3) or
-                  (not dated and argv | count >= 2)) }}
+              {{ command == '/reminder_done' and reminder_id != '' }}
         sequence:
-          - variables:
-              has_date: "{{ argv[0].count('.') == 2 }}"
-              date_token: >-
-                {{ argv[0] if argv[0].count('.') == 2
-                   else now().strftime('%d.%m.%Y') }}
-              time_token: >-
-                {{ argv[1] if argv[0].count('.') == 2 else argv[0] }}
-              text_tokens: >-
-                {{ argv[2:] if argv[0].count('.') == 2 else argv[1:] }}
-          - variables:
-              date_parts: "{{ date_token.split('.') }}"
-              reminder_text: "{{ text_tokens | join(' ') }}"
-              reminder_at: >-
-                {{ date_parts[2] }}-{{ date_parts[1] }}-{{ date_parts[0] }}
-                {{ time_token }}:00
+          - action: smart_reminder.complete
+            data:
+              reminder_id: "{{ reminder_id }}"
+          - action: telegram_bot.answer_callback_query
+            data:
+              callback_query_id: "{{ callback.id }}"
+              message: ✅ Напоминание выполнено
+              show_alert: false
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ command == '/reminder_snooze'
+                 and reminder_id != ''
+                 and duration != '' }}
+        sequence:
+          - action: smart_reminder.snooze
+            data:
+              reminder_id: "{{ reminder_id }}"
+              duration: "{{ duration }}"
+          - action: telegram_bot.answer_callback_query
+            data:
+              callback_query_id: "{{ callback.id }}"
+              message: "🔕 Отложено на {{ duration }}"
+              show_alert: false
+    default:
+      - action: telegram_bot.answer_callback_query
+        data:
+          callback_query_id: "{{ callback.id }}"
+          message: ⚠️ Некорректные данные кнопки
+          show_alert: true
+mode: parallel
+max: 20
+```
+
+### 3. Добавление напоминания командой `/reminder_add`
+
+Поддерживаются оба формата. Если дата пропущена, используется текущая дата в
+часовом поясе Home Assistant.
+
+```text
+/reminder_add 14.07.2026 22:00 Выбросить мусор
+/reminder_add 22:00 Выбросить мусор
+```
+
+```yaml
+alias: Telegram Commands. Добавить напоминание
+description: ""
+triggers:
+  - trigger: state
+    entity_id:
+      - event.my_telegram_bot
+conditions:
+  - condition: state
+    entity_id: event.my_telegram_bot
+    state:
+      - telegram_command
+    attribute: event_type
+  - condition: state
+    entity_id: event.my_telegram_bot
+    attribute: command
+    state: /reminder_add
+actions:
+  - variables:
+      raw_args: >-
+        {{ trigger.to_state.attributes.args | default([], true) }}
+  - variables:
+      tokens: >-
+        {{ raw_args.strip().split()
+           if raw_args is string
+           else (raw_args | list) }}
+  - variables:
+      has_date: >-
+        {{ tokens | count > 0
+           and (tokens[0]
+                | regex_match(
+                    '^[0-9]{2}[.][0-9]{2}[.][0-9]{4}$')) }}
+  - variables:
+      date_token: >-
+        {{ tokens[0] if has_date else now().strftime('%d.%m.%Y') }}
+      time_token: >-
+        {% if has_date and tokens | count > 1 %}
+          {{ tokens[1] }}
+        {% elif tokens | count > 0 %}
+          {{ tokens[0] }}
+        {% else %}
+          {{ '' }}
+        {% endif %}
+      text_tokens: >-
+        {{ tokens[2:] if has_date else tokens[1:] }}
+  - variables:
+      reminder_text: "{{ text_tokens | join(' ') | trim }}"
+      reminder_at: >-
+        {% set parsed = strptime(
+          date_token ~ ' ' ~ time_token,
+          '%d.%m.%Y %H:%M',
+          none) %}
+        {{ parsed.strftime('%Y-%m-%dT%H:%M:%S')
+           if parsed is not none
+           else '' }}
+  - variables:
+      valid_input: >-
+        {{ (date_token
+             | regex_match(
+                 '^[0-9]{2}[.][0-9]{2}[.][0-9]{4}$'))
+           and (time_token
+                | regex_match(
+                    '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$'))
+           and reminder_at != ''
+           and reminder_text != '' }}
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ valid_input }}"
+        sequence:
           - action: smart_reminder.create
             data:
               at: "{{ reminder_at }}"
               name: "{{ reminder_text }}"
               text: "{{ reminder_text }}"
               recipient_ids:
-                - "{{ update.chat_id }}"
+                - "{{ trigger.to_state.attributes.chat_id }}"
               repeat_interval_minutes: 15
               default_snooze_minutes: 30
-            response_variable: created
+            response_variable: created_reminder
           - action: telegram_bot.send_message
             data:
-              chat_id: "{{ update.chat_id }}"
+              chat_id: "{{ trigger.to_state.attributes.chat_id }}"
               parse_mode: plain_text
-              message: >-
-                Создано напоминание {{ created.reminder_id }} на {{ reminder_at }}
-
-      - conditions:
-          - condition: template
-            value_template: >-
-              {{ command == '/reminder_done' and argv | count >= 1 }}
-        sequence:
-          - action: smart_reminder.complete
-            data:
-              reminder_id: "{{ argv[0] }}"
-          - if:
-              - condition: template
-                value_template: "{{ update.event_type == 'telegram_callback' }}"
-            then:
-              - action: telegram_bot.answer_callback_query
-                data:
-                  callback_query_id: "{{ update.id }}"
-                  message: Выполнено
-            else:
-              - action: telegram_bot.send_message
-                data:
-                  chat_id: "{{ update.chat_id }}"
-                  parse_mode: plain_text
-                  message: Выполнено
-
-      - conditions:
-          - condition: template
-            value_template: >-
-              {{ command == '/reminder_snooze' and argv | count >= 2 }}
-        sequence:
-          - action: smart_reminder.snooze
-            data:
-              reminder_id: "{{ argv[0] }}"
-              duration: "{{ argv[1] }}"
-          - if:
-              - condition: template
-                value_template: "{{ update.event_type == 'telegram_callback' }}"
-            then:
-              - action: telegram_bot.answer_callback_query
-                data:
-                  callback_query_id: "{{ update.id }}"
-                  message: "Отложено на {{ argv[1] }}"
-            else:
-              - action: telegram_bot.send_message
-                data:
-                  chat_id: "{{ update.chat_id }}"
-                  parse_mode: plain_text
-                  message: "Отложено на {{ argv[1] }}"
+              message: |-
+                🔔 Напоминание создано на {{ date_token }} в {{ time_token }}.
+                ID: {{ created_reminder.reminder_id }}
     default:
       - action: telegram_bot.send_message
         data:
-          chat_id: "{{ update.chat_id }}"
+          chat_id: "{{ trigger.to_state.attributes.chat_id }}"
           parse_mode: plain_text
-          message: >-
-            Команды: /reminder_add [ДД.ММ.ГГГГ] ЧЧ:ММ текст,
-            /reminder_done ID, /reminder_snooze ID 1h30m
+          message: |-
+            ⚠️ Не удалось создать напоминание.
+
+            Используйте один из форматов:
+            /reminder_add ДД.ММ.ГГГГ ЧЧ:ММ текст
+            /reminder_add ЧЧ:ММ текст
+
+            Например:
+            /reminder_add 14.07.2026 22:00 Выбросить мусор
+            /reminder_add 22:00 Выбросить мусор
+mode: queued
+max: 5
 ```
 
-Telegram ограничивает размер callback data 64 байтами. Поэтому используйте
-короткие ASCII ID напоминаний, если создаёте их вручную.
+Telegram ограничивает callback data 64 байтами. Поэтому используйте короткие
+ASCII ID напоминаний, если создаёте их вручную.
 
 ## Хранение и надёжность
 
