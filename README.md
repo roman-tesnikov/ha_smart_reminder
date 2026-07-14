@@ -1,197 +1,203 @@
+> 🇷🇺 [Русская версия документации](README_RU.md)
+
 # Smart Reminder for Home Assistant
 
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.7%2B-41BDF5?logo=home-assistant&logoColor=white)](https://www.home-assistant.io/)
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Smart Reminder** — локальная Custom Integration для Home Assistant, которая
-добавляет управляемые напоминания с подтверждением выполнения, повторами,
-мьютом, DnD и полноценной страницей в боковом меню.
+**Smart Reminder** is a local custom integration for Home Assistant that adds
+managed reminders with completion acknowledgements, repeated notifications,
+snoozing, Do Not Disturb support, and a full management page in the sidebar.
 
-Интеграция **не отправляет сообщения сама**. Она отвечает за надёжное
-расписание и публикует события с готовыми текстом, получателями и параметрами
-кнопок. Способ доставки выбираете вы: Telegram, мобильное приложение,
-колонка, Mattermost или любая другая автоматизация Home Assistant.
+The integration **does not send messages by itself**. It maintains a reliable
+schedule and fires events containing ready-to-use text, recipients, and button
+parameters. You choose how to deliver them: Telegram, the Home Assistant mobile
+app, a smart speaker, Mattermost, or any other Home Assistant automation.
 
-## Возможности
+## Features
 
-- Создание, редактирование, дублирование, включение, удаление, перенос и завершение
-  напоминаний из отдельной адаптивной страницы HA.
-- Три режима: однократный, cron и задержка после фактического выполнения.
-- Повторное событие через заданный интервал, пока напоминание не выполнено.
-- Отдельные тексты для первого, повторного, отложенного и выполненного
-  напоминания с предсказуемыми fallback-правилами.
-- Глобальный DnD (по умолчанию `23:00–10:00`) и индивидуальный флаг его
-  игнорирования.
-- Точное расписание «раз в N недель» через расширение cron
-  `@every Nw <crontab>`.
-- Сохранение конфигурации и runtime-состояния в штатном HA `Store`.
-- Обработка просроченных напоминаний после запуска Home Assistant.
-- Отдельные sensor, switch и button-сущности для каждого напоминания.
-- Actions и события для автоматизаций; внешних облачных сервисов нет.
-- Русская и английская локализация config/options flow.
+- Create, edit, duplicate, enable, delete, snooze, and complete reminders from
+  a dedicated responsive Home Assistant page.
+- Three schedule types: one-time, cron, and delay after actual completion.
+- Repeated events at a configured interval until the reminder is completed.
+- Separate text fields for the first, repeated, snoozed, and completed events,
+  with predictable fallback rules.
+- Global DnD window (`23:00–10:00` by default) with a per-reminder override.
+- Exact “every N weeks” schedules through the `@every Nw <crontab>` extension.
+- Configuration and runtime state persistence using the native HA `Store`.
+- Processing of overdue reminders after Home Assistant starts.
+- Separate sensor, switch, and button entities for every reminder.
+- Actions and events for automations, with no external cloud dependency.
+- English and Russian localization for the config and options flows.
 
-## Совместимость
+## Compatibility
 
-- Home Assistant Core `2026.7.0` и новее в ветке `2026.7`.
-- Текущая проверенная patch-версия: `2026.7.2`.
-- Установка через HACS рекомендуется, ручная установка также поддерживается.
+- Home Assistant Core `2026.7.0` and newer releases in the `2026.7` branch.
+- Current tested patch release: `2026.7.2`.
+- HACS installation is recommended; manual installation is also supported.
 
-## Установка
+## Installation
 
-### HACS (рекомендуется)
+### HACS (recommended)
 
-Репозиторий уже содержит `hacs.json` и подготовлен как HACS Integration.
-До включения проекта в стандартный каталог HACS добавьте его как пользовательский:
+The repository includes `hacs.json` and is prepared as a HACS Integration.
+Until the project is included in the default HACS catalog, add it as a custom
+repository:
 
-1. Откройте **HACS → Integrations**.
-2. В меню выберите **Custom repositories**.
-3. Укажите URL этого GitHub-репозитория и категорию **Integration**.
-4. Найдите **Smart Reminder**, установите последнюю версию и перезапустите HA.
+1. Open **HACS → Integrations**.
+2. Select **Custom repositories** from the menu.
+3. Enter the URL of this GitHub repository and choose **Integration** as the
+   category.
+4. Find **Smart Reminder**, install the latest version, and restart Home
+   Assistant.
 
-### Вручную
+### Manual installation
 
-1. Скопируйте каталог `custom_components/smart_reminder` в каталог конфигурации
-   Home Assistant:
+1. Copy `custom_components/smart_reminder` into your Home Assistant
+   configuration directory:
 
    ```text
    /config/custom_components/smart_reminder
    ```
 
-2. Перезапустите Home Assistant.
+2. Restart Home Assistant.
 
-Настройка через `configuration.yaml` не требуется.
+No `configuration.yaml` entry is required.
 
-## Первый запуск
+## Initial setup
 
-1. Перейдите в **Настройки → Устройства и службы → Добавить интеграцию**.
-2. Найдите **Smart Reminder**.
-3. Подтвердите диапазон DnD. Время интерпретируется в часовом поясе Home
-   Assistant.
-4. После настройки в боковом меню появится страница **Smart Reminders**.
+1. Go to **Settings → Devices & services → Add integration**.
+2. Find **Smart Reminder**.
+3. Confirm the DnD window. Times are interpreted in the Home Assistant time
+   zone.
+4. After setup, the **Smart Reminders** page appears in the sidebar.
 
-Чтобы изменить общие настройки позже, откройте карточку интеграции и нажмите
-**Настроить**.
+To change global settings later, open the integration card and select
+**Configure**.
 
-| Общая настройка | Значение по умолчанию |
+| Global setting | Default value |
 |---|---|
-| Начало DnD | `23:00` |
-| Окончание DnD | `10:00` |
-| Текст ошибки об уже отложенном напоминании | `⚠️ Ошибка. Напоминание уже отложено` |
-| Текст ошибки об уже завершённом напоминании | `⚠️ Ошибка. Напоминание уже завершено` |
+| DnD starts | `23:00` |
+| DnD ends | `10:00` |
+| Error text for an already snoozed reminder | `⚠️ Ошибка. Напоминание уже отложено` |
+| Error text for an already completed reminder | `⚠️ Ошибка. Напоминание уже завершено` |
 
-Если начало и окончание DnD совпадают, тихий период отключён. Пустые тексты
-ошибок автоматически заменяются значениями по умолчанию.
+The two Russian strings above are the integration's literal built-in defaults;
+you can replace them with English or any other text in the integration options.
 
-## Поля напоминания
+If the DnD start and end times are equal, quiet hours are disabled. Empty error
+texts are automatically replaced with their defaults.
 
-| Поле | Описание |
+## Reminder fields
+
+| Field | Description |
 |---|---|
-| ID | Стабильный ID длиной до 64 символов. Допустимы латинские буквы, цифры, `.`, `_`, `-`. Ограничение делает ID безопасным для Telegram callback-команд. |
-| Название | Человекочитаемое имя в UI и сущностях. |
-| Включено | Выключенное напоминание хранится, но не срабатывает. При повторном включении просроченное время обрабатывается сразу с учётом DnD. |
-| Тип | `once`, `cron` или `after_completion`. |
-| Дата и время первого запуска | Показывается при создании `once` и `after_completion`, в часовом поясе HA. Формат: `ДД.ММ.ГГГГ`, `ЧЧ:ММ` (24 часа). |
-| Дата и время следующего запуска | Показывается при редактировании существующего напоминания любого типа и доступно для изменения. Формат: `ДД.ММ.ГГГГ`, `ЧЧ:ММ` (24 часа). |
-| Crontab | Стандартное выражение из 5 полей. |
-| Якорная дата | Необязательная дата первого цикла для расписания `@every Nw`. Позволяет выбрать нужную фазу недель, например `27.07.2026`; должна совпадать с днём запуска базового cron. |
-| Задержка после выполнения | Минуты до следующего запуска `after_completion`. |
-| Игнорировать DnD | Разрешает этому напоминанию срабатывать в тихий период. |
-| Частота до выполнения | Интервал между повторными событиями в минутах. |
-| Мьют по умолчанию | Попадает в событие как минуты и строка (`1h30m`) для кнопки бота. |
-| Первый текст | Используется в `smart_reminder_triggered`. |
-| Повторный текст | Используется в `smart_reminder_repeated`; если пуст, берётся первый текст. |
-| Текст отложенного напоминания | Передаётся в `smart_reminder_snoozed` непосредственно при нажатии «Отложить». Не используется в `smart_reminder_repeated`. |
-| Текст выполнения | Передаётся в `smart_reminder_completed`; может быть пустым. |
-| ID получателей | Произвольные строки. Доставка трактует их самостоятельно, например как Telegram chat ID. |
+| ID | Stable ID up to 64 characters. Latin letters, digits, `.`, `_`, and `-` are allowed. This keeps IDs safe for Telegram callback commands. |
+| Name | Human-readable name displayed in the UI and entities. |
+| Enabled | A disabled reminder remains stored but does not fire. Re-enabling an overdue reminder processes it immediately, subject to DnD. |
+| Type | `once`, `cron`, or `after_completion`. |
+| First trigger date and time | Shown when creating `once` and `after_completion` reminders, in the HA time zone. Format: `DD.MM.YYYY`, `HH:MM` (24-hour clock). |
+| Next trigger date and time | Shown and editable for every existing reminder type. Format: `DD.MM.YYYY`, `HH:MM` (24-hour clock). |
+| Crontab | Standard five-field crontab expression. |
+| Anchor date | Optional first cycle date for an `@every Nw` schedule. Selects the week phase, for example `27.07.2026`, and must match the base cron day. |
+| Delay after completion | Number of minutes before the next `after_completion` trigger. |
+| Ignore DnD | Allows this reminder to fire during quiet hours. |
+| Repeat interval | Minutes between repeated events until completion. |
+| Default snooze | Included in events both as minutes and as a compact string such as `1h30m` for bot buttons. |
+| First text | Used by `smart_reminder_triggered`. |
+| Repeated text | Used by `smart_reminder_repeated`; falls back to the first text when empty. |
+| Snoozed text | Sent in `smart_reminder_snoozed` immediately after the Snooze action. It is not used by `smart_reminder_repeated`. |
+| Completed text | Sent in `smart_reminder_completed`; may be empty. |
+| Recipient IDs | Arbitrary strings interpreted by the delivery automation, for example as Telegram chat IDs. |
 
-### Типы расписания
+### Schedule types
 
-| Тип | После выполнения |
+| Type | Behavior after completion |
 |---|---|
-| Однократное | Напоминание и его сущности удаляются. |
-| По расписанию | Рассчитывается ближайшее следующее время по cron. |
-| С задержкой | Следующий запуск = фактическое время выполнения + заданное количество минут. |
+| One-time | The reminder and its entities are deleted. |
+| Cron | The nearest next cron occurrence is calculated. |
+| Delay after completion | Next trigger = actual completion time + configured delay in minutes. |
 
-Стандартный crontab не умеет выразить «каждые две недели». Для этого
-поддерживается обратно совместимое расширение:
+Standard crontab cannot express “every two weeks.” Smart Reminder provides a
+backward-compatible extension:
 
 ```text
 @every 2w 0 10 * * 1
 ```
 
-Оно означает: взять cron «каждый понедельник в 10:00», но использовать только
-каждую вторую неделю. Поле **Якорная дата** выбирает фазу расписания: при якоре
-`27.07.2026` запуски будут `27.07`, `10.08`, `24.08` и так далее. Если поле
-пустое, якорем автоматически становится ближайший запуск. Якорь сохраняется
-вместе с напоминанием, поэтому расписание не сбивается после перезапуска и
-учитывает DST часового пояса HA.
+This starts with “every Monday at 10:00” but uses only every second week. The
+**Anchor date** selects the schedule phase: with `27.07.2026` as the anchor,
+occurrences are `27.07`, `10.08`, `24.08`, and so on. When the field is empty,
+the nearest occurrence becomes the anchor automatically. The anchor is stored
+with the reminder, so the phase survives restarts and respects DST in the Home
+Assistant time zone.
 
-### Два примера из реальной жизни
+### Two real-world examples
 
-**Полить кактус раз в две недели по понедельникам в 10:00:**
+**Water a cactus every two weeks on Monday at 10:00:**
 
-- тип: **По расписанию**;
+- type: **Cron**;
 - cron: `@every 2w 0 10 * * 1`;
-- якорная дата: `27.07.2026`;
-- частота до выполнения: например, `60` минут.
+- anchor date: `27.07.2026`;
+- repeat interval: for example, `60` minutes.
 
-**Заменить воду коту через сутки после последней замены:**
+**Replace the cat's water one day after it was last replaced:**
 
-- тип: **С задержкой после выполнения**;
-- дата и время: первый запуск;
-- задержка: `1440` минут.
+- type: **Delay after completion**;
+- date and time: the first trigger;
+- delay: `1440` minutes.
 
-## Жизненный цикл
+## Lifecycle
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Запланировано
-    Запланировано --> ВРаботе: smart_reminder_triggered
-    ВРаботе --> ВРаботе: smart_reminder_repeated
-    ВРаботе --> Отложено: snooze
-    Отложено --> ВРаботе: smart_reminder_repeated
-    ВРаботе --> Запланировано: complete (cron / delay)
-    ВРаботе --> [*]: complete (once)
+    [*] --> Scheduled
+    Scheduled --> Active: smart_reminder_triggered
+    Active --> Active: smart_reminder_repeated
+    Active --> Snoozed: snooze
+    Snoozed --> Active: smart_reminder_repeated
+    Active --> Scheduled: complete (cron / delay)
+    Active --> [*]: complete (once)
 ```
 
-DnD не отбрасывает событие: ближайшее срабатывание переносится на окончание
-тихого периода. После офлайна HA обрабатывает каждое просроченное напоминание
-один раз после `Home Assistant started`; пропущенные повторы одного и того же
-напоминания объединяются, чтобы не создавать шторм уведомлений.
+DnD does not discard an event: the nearest trigger is moved to the end of the
+quiet period. After an outage, HA processes each overdue reminder once after
+`Home Assistant started`. Missed repetitions of the same reminder are
+coalesced to avoid a notification storm.
 
-## Сущности Home Assistant
+## Home Assistant entities
 
-Для каждого напоминания динамически создаются четыре сущности:
+Four entities are created dynamically for every reminder:
 
-| Платформа | Имя | Назначение |
+| Platform | Name | Purpose |
 |---|---|---|
-| `sensor` | `<название> status` | Состояние `scheduled`, `active` или `snoozed`; атрибуты содержат ID, тип, следующий запуск, cron-якорь, получателей и интервалы. |
-| `switch` | `<название> enabled` | Включение и отключение напоминания. |
-| `button` | `<название> snooze` | Мьют на время по умолчанию. |
-| `button` | `<название> complete` | Завершение напоминания. |
+| `sensor` | `<name> status` | State is `scheduled`, `active`, or `snoozed`; attributes include the ID, type, next trigger, cron anchor, recipients, and intervals. |
+| `switch` | `<name> enabled` | Enables or disables the reminder. |
+| `button` | `<name> snooze` | Snoozes for the default duration. |
+| `button` | `<name> complete` | Completes the reminder. |
 
-Все сущности объединены в виртуальное устройство **Smart Reminder**. Конкретный
-`entity_id` создаёт Home Assistant из названия, поэтому для автоматизаций лучше
-выбирать сущность через UI или использовать стабильный атрибут `reminder_id`.
+All entities belong to the virtual **Smart Reminder** device. Home Assistant
+generates each `entity_id` from the name, so select entities through the UI or
+use the stable `reminder_id` attribute in automations.
 
-## События
+## Events
 
-| Event type | Когда публикуется |
+| Event type | When it is fired |
 |---|---|
-| `smart_reminder_triggered` | Первое срабатывание; статус уже `active`. |
-| `smart_reminder_repeated` | Повтор до выполнения или срабатывание после snooze. Поле `text` всегда берётся из текста повторных напоминаний; если он пуст, используется текст первого напоминания. |
-| `smart_reminder_snoozed` | Результат попытки отложить. При успехе `text` содержит текст отложенного напоминания; при повторном snooze — настроенный общий текст ошибки. |
-| `smart_reminder_completed` | Результат попытки завершить. Публикуется и для однократного напоминания, которое к этому моменту уже удалено. Для recurring уже рассчитан следующий запуск. При повторном complete содержит настроенный общий текст ошибки. |
+| `smart_reminder_triggered` | First trigger; the status is already `active`. |
+| `smart_reminder_repeated` | Repetition before completion or trigger after snooze. `text` always comes from the repeated text field and falls back to the first text when empty. |
+| `smart_reminder_snoozed` | Result of a Snooze attempt. On success, `text` contains the configured snoozed text; a repeated Snooze returns the global error text. |
+| `smart_reminder_completed` | Result of a Complete attempt. It is also fired for a one-time reminder after that reminder has been removed. Recurring reminders already contain their calculated next trigger. A repeated Complete returns the global error text. |
 
-Основной контракт данных:
+Core event data contract:
 
 ```yaml
 reminder_id: take_out_trash
-name: Выбросить мусор
+name: Take out the trash
 reminder_type: once
 status: active
-text: Выбросить мусор
+text: Take out the trash
 recipient_ids:
   - "<telegram_chat_id>"
 ignore_dnd: false
@@ -204,59 +210,58 @@ next_trigger: "2026-07-14T19:15:00+00:00"
 cron_anchor: null
 ```
 
-В событиях `smart_reminder_snoozed` и `smart_reminder_completed` поле
-`next_trigger` всегда присутствует. Оно содержит ISO 8601-время следующего
-запуска либо `null`, если однократное напоминание завершено и удалено.
-Дополнительно оба события содержат `action_succeeded` (`true`/`false`) и
-`reason`: `already_snoozed`, `already_completed` либо `null`. У
-`smart_reminder_snoozed` также есть `duration` и `snoozed_until`.
+The `next_trigger` field is always present in `smart_reminder_snoozed` and
+`smart_reminder_completed`. It contains the next trigger as an ISO 8601 value,
+or `null` after a one-time reminder has been completed and deleted. Both events
+also include `action_succeeded` (`true`/`false`) and `reason`, which is
+`already_snoozed`, `already_completed`, or `null`. The
+`smart_reminder_snoozed` event additionally includes `duration` and
+`snoozed_until`.
 
-Пример вывода `next_trigger` в часовом поясе Home Assistant в формате
-`ДД.ММ.ГГГГ ЧЧ:ММ`:
+Format `next_trigger` in the Home Assistant time zone as `DD.MM.YYYY HH:MM`:
 
 ```yaml
 formatted_next_trigger: >-
   {% set value = trigger.event.data.next_trigger %}
   {{ as_timestamp(value) | timestamp_custom('%d.%m.%Y %H:%M', true)
-     if value else 'Следующего запуска нет' }}
+     if value else 'No next trigger' }}
 ```
 
-В шаблонах HA минуты задаются как `%M` (аналог `ii` из некоторых других
-форматов даты).
+In HA templates, `%M` means minutes (equivalent to `ii` in some other date
+format syntaxes).
 
-Поля `text` в событиях `smart_reminder_snoozed` и
-`smart_reminder_completed` могут быть пустыми строками, но сами события всё
-равно публикуются. Это позволяет автоматизации подставить стандартный шаблон.
-При повторном snooze или complete поле `text` уже содержит непустой общий текст
-ошибки. Повторное действие не изменяет статус, `next_trigger` и расписание.
+The `text` field in `smart_reminder_snoozed` and `smart_reminder_completed` may
+be an empty string, but the events are still fired. This lets an automation
+provide a default template. A repeated Snooze or Complete always includes the
+non-empty global error text. Repeated actions do not change the status,
+`next_trigger`, or schedule.
 
-`smart_reminder_snoozed` публикуется непосредственно при выполнении action
-откладывания. Когда заданная задержка заканчивается, планировщик публикует уже
-`smart_reminder_repeated`, использует текст повторных напоминаний и переводит
-напоминание из `snoozed` в `active`.
+`smart_reminder_snoozed` is fired immediately when the Snooze action is called.
+When the delay expires, the scheduler fires `smart_reminder_repeated`, uses the
+repeated text, and changes the reminder from `snoozed` to `active`.
 
-## Управление в интерфейсе
+## Management page
 
-Кнопка **Дублировать** открывает форму создания, заполненную данными выбранного
-напоминания. Для копии генерируется новый ID, а runtime-состояние исходного
-напоминания не копируется. Для `once` и `after_completion` ближайший запуск
-исходного напоминания подставляется как первый запуск копии. Сохранение создаёт
-отдельное напоминание и не изменяет оригинал.
+The **Duplicate** button opens a creation form prefilled from the selected
+reminder. A new ID is generated, and the original reminder's runtime state is
+not copied. For `once` and `after_completion`, the original reminder's nearest
+trigger becomes the copy's first trigger. Saving creates a separate reminder
+without changing the original.
 
 ## Actions
 
 ### `smart_reminder.create`
 
-Создаёт упрощённое однократное напоминание. `reminder_id` и `name`
-необязательны. Если action вызван с `response_variable`, возвращает созданный ID.
+Creates a simplified one-time reminder. `reminder_id` and `name` are optional.
+When the action is called with `response_variable`, it returns the generated ID.
 
 ```yaml
 action: smart_reminder.create
 data:
   reminder_id: take_out_trash
-  name: Выбросить мусор
+  name: Take out the trash
   at: "2026-07-14 22:00:00"
-  text: Выбросить мусор
+  text: Take out the trash
   recipient_ids:
     - "<telegram_chat_id>"
   ignore_dnd: false
@@ -267,8 +272,8 @@ response_variable: created_reminder
 
 ### `smart_reminder.snooze`
 
-Формат длительности — комбинация дней, часов и минут без пробелов:
-`15m`, `1h30m`, `2d3h15m`.
+The duration is a compact combination of days, hours, and minutes without
+spaces: `15m`, `1h30m`, or `2d3h15m`.
 
 ```yaml
 action: smart_reminder.snooze
@@ -277,8 +282,8 @@ data:
   duration: 1h30m
 ```
 
-Если напоминание уже имеет статус `snoozed`, повторный action не переносит его
-ещё раз, а публикует `smart_reminder_snoozed` с `action_succeeded: false`.
+If the reminder is already `snoozed`, another action does not move it again and
+fires `smart_reminder_snoozed` with `action_succeeded: false`.
 
 ### `smart_reminder.complete`
 
@@ -288,29 +293,29 @@ data:
   reminder_id: take_out_trash
 ```
 
-Если recurring-напоминание уже завершено и запланирован его следующий цикл,
-повторный action не рассчитывает запуск заново, а публикует
-`smart_reminder_completed` с `action_succeeded: false`. Однократное напоминание
-после успешного завершения удаляется, поэтому его повторный вызов возвращает
-ошибку «не найдено» и не может опубликовать второе событие.
+If a recurring reminder has already been completed and its next cycle is
+scheduled, another action does not recalculate the trigger. Instead, it fires
+`smart_reminder_completed` with `action_succeeded: false`. A one-time reminder
+is deleted after successful completion, so calling the action again returns a
+“not found” error and cannot fire a second event.
 
-## Полный пример с Telegram Bot
+## Complete Telegram Bot example
 
-Пример рассчитан на актуальную UI-интеграцию
-[Telegram bot](https://www.home-assistant.io/integrations/telegram_bot) в HA
-2026.7. Она публикует команды и callback-кнопки через event-сущность. Во всех
-примерах замените `event.my_telegram_bot` на event-сущность своего бота. Если
-настроено несколько ботов, добавьте `config_entry_id` в actions
-`telegram_bot.*`.
+The examples target the current UI-based
+[Telegram bot](https://www.home-assistant.io/integrations/telegram_bot)
+integration in HA 2026.7. It exposes commands and callback buttons through an
+event entity. Replace `event.my_telegram_bot` with your bot's event entity in
+every example. If you have multiple bots, add `config_entry_id` to the
+`telegram_bot.*` actions.
 
-### 1. Обработка событий Smart Reminder
+### 1. Handle Smart Reminder events
 
-Автоматизация доставляет первое и повторное напоминания с inline-кнопками, а
-также подтверждения выполнения и откладывания. Значения `recipient_ids`
-интерпретируются как Telegram chat ID.
+This automation delivers first and repeated reminders with inline buttons, as
+well as completion and snooze confirmations. It interprets `recipient_ids` as
+Telegram chat IDs.
 
 ```yaml
-alias: Smart Reminder. Обработка событий приложения
+alias: Smart Reminder. Handle application events
 triggers:
   - trigger: event
     event_type: smart_reminder_triggered
@@ -345,8 +350,8 @@ actions:
               message: "{{ reminder.text }}"
               inline_keyboard:
                 - >-
-                  ✅ Готово:/reminder_done:{{ reminder.reminder_id }},
-                  🔕 Отложить:/reminder_snooze:{{ reminder.reminder_id }}:{{
+                  ✅ Done:/reminder_done:{{ reminder.reminder_id }},
+                  🔕 Snooze:/reminder_snooze:{{ reminder.reminder_id }}:{{
                   reminder.default_snooze_duration }}
       - conditions:
           - condition: template
@@ -359,7 +364,7 @@ actions:
                 {% set value = reminder.next_trigger %}
                 {{ as_timestamp(value)
                    | timestamp_custom('%d.%m.%Y %H:%M', true)
-                   if value else 'Следующего запуска нет' }}
+                   if value else 'No next trigger' }}
           - action: telegram_bot.send_message
             data:
               chat_id: "{{ reminder.recipient_ids | map('int') | list }}"
@@ -367,8 +372,8 @@ actions:
               message: >-
                 {{ completed_text
                    if completed_text
-                   else '✅ Напоминание выполнено' }}.
-                Следующий запуск: {{ formatted_next_trigger }}
+                   else '✅ Reminder completed' }}.
+                Next trigger: {{ formatted_next_trigger }}
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'snoozed' }}"
@@ -380,7 +385,7 @@ actions:
                 {% set value = reminder.next_trigger %}
                 {{ as_timestamp(value)
                    | timestamp_custom('%d.%m.%Y %H:%M', true)
-                   if value else 'Следующего запуска нет' }}
+                   if value else 'No next trigger' }}
           - action: telegram_bot.send_message
             data:
               chat_id: "{{ reminder.recipient_ids | map('int') | list }}"
@@ -388,19 +393,19 @@ actions:
               message: >-
                 {{ snoozed_text
                    if snoozed_text
-                   else '🔕 Напоминание отложено' }}.
-                Следующий запуск: {{ formatted_next_trigger }}
+                   else '🔕 Reminder snoozed' }}.
+                Next trigger: {{ formatted_next_trigger }}
 mode: queued
 max: 20
 ```
 
-### 2. Обработка inline-кнопок Telegram
+### 2. Handle Telegram inline buttons
 
-Callback data использует разделитель `:` и совпадает с командами из первой
-автоматизации.
+Callback data uses `:` as a separator and matches the commands generated by the
+first automation.
 
 ```yaml
-alias: Smart Reminder. Обработка кнопок Telegram
+alias: Smart Reminder. Handle Telegram buttons
 description: ""
 triggers:
   - trigger: state
@@ -460,7 +465,7 @@ actions:
           - action: telegram_bot.answer_callback_query
             data:
               callback_query_id: "{{ callback.id }}"
-              message: ✅ Напоминание выполнено
+              message: ✅ Reminder completed
               show_alert: false
       - conditions:
           - condition: template
@@ -476,30 +481,30 @@ actions:
           - action: telegram_bot.answer_callback_query
             data:
               callback_query_id: "{{ callback.id }}"
-              message: "🔕 Отложено на {{ duration }}"
+              message: "🔕 Snoozed for {{ duration }}"
               show_alert: false
     default:
       - action: telegram_bot.answer_callback_query
         data:
           callback_query_id: "{{ callback.id }}"
-          message: ⚠️ Некорректные данные кнопки
+          message: ⚠️ Invalid button data
           show_alert: true
 mode: parallel
 max: 20
 ```
 
-### 3. Добавление напоминания командой `/reminder_add`
+### 3. Add a reminder with `/reminder_add`
 
-Поддерживаются оба формата. Если дата пропущена, используется текущая дата в
-часовом поясе Home Assistant.
+Both formats are supported. If the date is omitted, the current date in the
+Home Assistant time zone is used.
 
 ```text
-/reminder_add 14.07.2026 22:00 Выбросить мусор
-/reminder_add 22:00 Выбросить мусор
+/reminder_add 14.07.2026 22:00 Take out the trash
+/reminder_add 22:00 Take out the trash
 ```
 
 ```yaml
-alias: Telegram Commands. Добавить напоминание
+alias: Telegram Commands. Add reminder
 description: ""
 triggers:
   - trigger: state
@@ -583,7 +588,7 @@ actions:
               chat_id: "{{ trigger.to_state.attributes.chat_id }}"
               parse_mode: plain_text
               message: |-
-                🔔 Напоминание создано на {{ date_token }} в {{ time_token }}.
+                🔔 Reminder created for {{ date_token }} at {{ time_token }}.
                 ID: {{ created_reminder.reminder_id }}
     default:
       - action: telegram_bot.send_message
@@ -591,46 +596,46 @@ actions:
           chat_id: "{{ trigger.to_state.attributes.chat_id }}"
           parse_mode: plain_text
           message: |-
-            ⚠️ Не удалось создать напоминание.
+            ⚠️ Could not create the reminder.
 
-            Используйте один из форматов:
-            /reminder_add ДД.ММ.ГГГГ ЧЧ:ММ текст
-            /reminder_add ЧЧ:ММ текст
+            Use one of these formats:
+            /reminder_add DD.MM.YYYY HH:MM text
+            /reminder_add HH:MM text
 
-            Например:
-            /reminder_add 14.07.2026 22:00 Выбросить мусор
-            /reminder_add 22:00 Выбросить мусор
+            Examples:
+            /reminder_add 14.07.2026 22:00 Take out the trash
+            /reminder_add 22:00 Take out the trash
 mode: queued
 max: 5
 ```
 
-Telegram ограничивает callback data 64 байтами. Поэтому используйте короткие
-ASCII ID напоминаний, если создаёте их вручную.
+Telegram limits callback data to 64 bytes. Use short ASCII reminder IDs when
+creating them manually.
 
-## Хранение и надёжность
+## Storage and reliability
 
-Данные сохраняются после каждого изменения в `.storage` через штатный
-`homeassistant.helpers.storage.Store`. Не редактируйте файл вручную. Хранятся
-не только настройки, но и статус, следующий запуск, последняя активация,
-последнее выполнение и якорь многонедельного cron.
+Data is saved after every change in `.storage` using the native
+`homeassistant.helpers.storage.Store`. Do not edit the file manually. Stored
+data includes both configuration and runtime state: status, next trigger, last
+activation, last completion, and the multi-week cron anchor.
 
-Событие публикуется только после сохранения нового состояния. Автоматизация,
-которая сразу читает sensor, увидит уже актуальные `active`, `snoozed` или
-следующее запланированное время. Исключение — выполненное однократное
-напоминание: оно удаляется вместе со своими сущностями, а все нужные данные
-остаются в payload события `smart_reminder_completed`.
+An event is fired only after the new state has been saved. An automation that
+immediately reads a sensor therefore sees the current `active`, `snoozed`, or
+next scheduled state. The exception is a completed one-time reminder: it and
+its entities are deleted, while all required values remain in the
+`smart_reminder_completed` event payload.
 
-## Безопасность
+## Security
 
-- Страница и изменяющие WebSocket-команды доступны только администраторам HA.
-- Интеграция не открывает внешних endpoint и не делает сетевых запросов.
-- ID получателей считаются непрозрачными строками и нигде не используются до
-  передачи в событие.
-- Тексты экранируются перед выводом в таблице панели.
+- The management page and mutating WebSocket commands require an HA
+  administrator.
+- The integration exposes no external endpoints and makes no network requests.
+- Recipient IDs are treated as opaque strings and are only copied into events.
+- Text is escaped before it is rendered in the management table.
 
-## Разработка
+## Development
 
-Целевая версия HA 2026.7 использует Python 3.14. Локальные проверки:
+Home Assistant 2026.7 targets Python 3.14. Local checks:
 
 ```bash
 python3.14 -m pip install -r requirements_test.txt
@@ -639,24 +644,23 @@ ruff format --check .
 pytest
 ```
 
-CI также запускает HACS validation. Backend полностью асинхронный; на всё
-множество напоминаний используется только один ближайший таймер.
+CI also runs HACS validation. The backend is fully asynchronous and uses only
+one nearest-point timer for the complete set of reminders.
 
-## Диагностика
+## Troubleshooting
 
-- **Страница не появилась:** убедитесь, что интеграция не только установлена,
-  но и добавлена в **Настройки → Устройства и службы**, затем обновите страницу
-  браузера.
-- **Напоминание не сработало ночью:** проверьте DnD и флаг
-  **Игнорировать DnD**.
-- **Telegram не получает событие:** проверьте прослушивание
-  `smart_reminder_triggered` в Developer Tools и правильность `recipient_ids`.
-- **Cron запускается не в то время:** cron вычисляется в часовом поясе,
-  выбранном в общих настройках Home Assistant. Для `@every Nw` также проверьте
-  якорную дату: она задаёт фазу многонедельного цикла.
-- **После офлайна пришло одно, а не много сообщений:** пропущенные повторы одного
-  напоминания намеренно объединяются в одно актуальное событие.
+- **The page did not appear:** make sure the integration is both installed and
+  added under **Settings → Devices & services**, then refresh the browser.
+- **A reminder did not fire at night:** check DnD and the reminder's
+  **Ignore DnD** option.
+- **Telegram receives no event:** listen for `smart_reminder_triggered` in
+  Developer Tools and verify `recipient_ids`.
+- **Cron fires at the wrong time:** cron is evaluated in the time zone selected
+  in Home Assistant global settings. For `@every Nw`, also verify the anchor
+  date, which controls the multi-week phase.
+- **Only one message arrived after an outage:** missed repetitions of the same
+  reminder are intentionally coalesced into one current event.
 
-## Лицензия
+## License
 
 [MIT](LICENSE)
