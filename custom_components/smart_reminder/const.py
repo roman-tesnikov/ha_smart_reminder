@@ -9,7 +9,7 @@ from homeassistant.const import Platform
 
 DOMAIN: Final = "smart_reminder"
 NAME: Final = "Smart Reminder"
-VERSION: Final = "1.2.2"
+VERSION: Final = "1.2.3"
 
 PLATFORMS: Final = [Platform.SENSOR, Platform.BUTTON, Platform.SWITCH]
 

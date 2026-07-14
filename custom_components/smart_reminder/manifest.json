@@ -10,5 +10,5 @@
   "issue_tracker": "https://github.com/roman-tesnikov/ha_smart_reminder/issues",
   "requirements": ["croniter==6.2.3"],
   "single_config_entry": true,
-  "version": "1.2.2"
+  "version": "1.2.3"
 }

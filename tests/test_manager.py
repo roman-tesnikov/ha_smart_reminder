@@ -146,7 +146,7 @@ def test_due_reminder_becomes_active_and_fires_first_event(
     assert manager._store.saved[-1]["reminders"][0]["status"] == "active"
 
 
-def test_snoozed_wakeup_uses_repeat_event_and_snoozed_text(
+def test_snoozed_wakeup_uses_repeat_event_and_repeat_text(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(manager_module, "utcnow", lambda: NOW)
@@ -160,26 +160,28 @@ def test_snoozed_wakeup_uses_repeat_event_and_snoozed_text(
     asyncio.run(manager.async_process_due())
 
     assert manager.hass.bus.events[0][0] == EVENT_REPEATED
-    assert manager.hass.bus.events[0][1]["text"] == "Snoozed text"
+    assert manager.hass.bus.events[0][1]["text"] == "Repeat text"
     assert reminder.repeat_count == 1
 
 
 @pytest.mark.parametrize(
-    ("snoozed_text", "repeat_text", "expected"),
+    ("repeat_text", "expected"),
     [
-        ("", "Repeat text", "Repeat text"),
-        ("", "", "First text"),
+        ("Another repeat text", "Another repeat text"),
+        ("", "First text"),
     ],
 )
-def test_snoozed_text_falls_back_to_repeat_then_first_text(
+def test_snoozed_wakeup_repeat_text_falls_back_to_first_text(
     monkeypatch: pytest.MonkeyPatch,
-    snoozed_text: str,
     repeat_text: str,
     expected: str,
 ) -> None:
     monkeypatch.setattr(manager_module, "utcnow", lambda: NOW)
     reminder = Reminder.from_payload(
-        reminder_payload(snoozed_text=snoozed_text, repeat_text=repeat_text),
+        reminder_payload(
+            snoozed_text="This text must not be used",
+            repeat_text=repeat_text,
+        ),
         now=NOW - timedelta(days=1),
         local_tz=ZoneInfo("UTC"),
     )
@@ -251,7 +253,7 @@ def test_snoozed_reminder_fires_repeated_event_when_delay_expires(
         EVENT_SNOOZED,
         EVENT_REPEATED,
     ]
-    assert manager.hass.bus.events[-1][1]["text"] == "Snoozed text"
+    assert manager.hass.bus.events[-1][1]["text"] == "Repeat text"
     assert reminder.status is ReminderStatus.ACTIVE
 
 

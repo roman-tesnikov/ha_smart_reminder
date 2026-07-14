@@ -356,7 +356,7 @@ class SmartReminderPanel extends HTMLElement {
             <div class="field full">
               <label for="snoozed-text">Текст отложенного напоминания</label>
               <textarea id="snoozed-text" name="snoozed_text"></textarea>
-              <span class="hint">Используется при срабатывании после мьюта. Если пусто, используется текст повторного, затем первого напоминания.</span>
+              <span class="hint">Передаётся в smart_reminder_snoozed сразу при нажатии «Отложить». После окончания мьюта smart_reminder_repeated использует текст повторных напоминаний.</span>
             </div>
             <div class="field full">
               <label for="completed-text">Текст выполненного напоминания</label>

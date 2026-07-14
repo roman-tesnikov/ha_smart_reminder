@@ -388,13 +388,7 @@ class ReminderManager:
                     ReminderStatus.SNOOZED,
                 )
                 event_type = EVENT_REPEATED if is_repeat else EVENT_TRIGGERED
-                if previous_status is ReminderStatus.SNOOZED:
-                    text = (
-                        reminder.snoozed_text
-                        or reminder.repeat_text
-                        or reminder.first_text
-                    )
-                elif is_repeat:
+                if is_repeat:
                     text = reminder.repeat_text or reminder.first_text
                 else:
                     text = reminder.first_text
