@@ -9,6 +9,8 @@ import pytest
 
 from custom_components.smart_reminder import manager as manager_module
 from custom_components.smart_reminder.const import (
+    DEFAULT_ALREADY_COMPLETED_ERROR_TEXT,
+    DEFAULT_ALREADY_SNOOZED_ERROR_TEXT,
     EVENT_COMPLETED,
     EVENT_REPEATED,
     EVENT_SNOOZED,
@@ -80,6 +82,8 @@ def lifecycle_manager(reminder: Reminder) -> ReminderManager:
     manager._started = True
     manager._stopped = False
     manager._cancel_timer = None
+    manager._already_snoozed_error_text = "Custom already snoozed error"
+    manager._already_completed_error_text = "Custom already completed error"
     manager._arm_timer = lambda: None
     manager._notify_updated = lambda: None
     return manager
@@ -113,6 +117,15 @@ def test_equal_dnd_bounds_disable_quiet_period() -> None:
     manager = manager_with_dnd(time(10), time(10))
 
     assert manager._dnd_end_for(datetime(2026, 7, 13, 7, tzinfo=UTC)) is None
+
+
+def test_missing_error_text_options_use_defaults() -> None:
+    manager = manager_with_dnd(time(23), time(10))
+
+    manager._apply_options({})
+
+    assert manager._already_snoozed_error_text == DEFAULT_ALREADY_SNOOZED_ERROR_TEXT
+    assert manager._already_completed_error_text == DEFAULT_ALREADY_COMPLETED_ERROR_TEXT
 
 
 def test_due_reminder_becomes_active_and_fires_first_event(
@@ -212,6 +225,38 @@ def test_snooze_persists_new_time_and_fires_event(
     assert manager.hass.bus.events[0][0] == EVENT_SNOOZED
     assert manager.hass.bus.events[0][1]["text"] == "Snoozed text"
     assert manager.hass.bus.events[0][1]["duration"] == "1h30m"
+    assert (
+        manager.hass.bus.events[0][1]["next_trigger"]
+        == (NOW + timedelta(minutes=90)).isoformat()
+    )
+    assert manager.hass.bus.events[0][1]["action_succeeded"] is True
+    assert manager.hass.bus.events[0][1]["reason"] is None
+
+
+def test_repeated_snooze_does_not_move_next_trigger(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(manager_module, "utcnow", lambda: NOW)
+    reminder = Reminder.from_payload(
+        reminder_payload(), now=NOW - timedelta(days=1), local_tz=ZoneInfo("UTC")
+    )
+    manager = lifecycle_manager(reminder)
+
+    asyncio.run(manager.async_snooze(reminder.id, "30m"))
+    first_next_trigger = reminder.next_trigger
+    asyncio.run(manager.async_snooze(reminder.id, "2h"))
+
+    assert reminder.status is ReminderStatus.SNOOZED
+    assert reminder.next_trigger == first_next_trigger
+    assert len(manager._store.saved) == 1
+    event_type, event_data = manager.hass.bus.events[-1]
+    assert event_type == EVENT_SNOOZED
+    assert event_data["text"] == "Custom already snoozed error"
+    assert event_data["next_trigger"] == first_next_trigger.isoformat()
+    assert event_data["snoozed_until"] == first_next_trigger.isoformat()
+    assert event_data["scheduled_for"] is None
+    assert event_data["action_succeeded"] is False
+    assert event_data["reason"] == "already_snoozed"
 
 
 def test_snooze_with_empty_snoozed_text_still_fires_event(
@@ -255,6 +300,35 @@ def test_updating_cron_anchor_recalculates_next_trigger(
     assert updated.next_trigger == datetime(2026, 7, 27, 7, 0, tzinfo=UTC)
 
 
+def test_updating_next_trigger_preserves_schedule_and_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(manager_module, "utcnow", lambda: NOW)
+    payload = reminder_payload(
+        reminder_type="after_completion",
+        delay_minutes=1440,
+    )
+    reminder = Reminder.from_payload(
+        payload, now=NOW - timedelta(days=1), local_tz=ZoneInfo("UTC")
+    )
+    reminder.status = ReminderStatus.SNOOZED
+    reminder.repeat_count = 2
+    original_scheduled_at = reminder.scheduled_at
+    manager = lifecycle_manager(reminder)
+
+    updated = asyncio.run(
+        manager.async_update(
+            reminder.id,
+            {**payload, "next_trigger": "2026-07-20T21:12:00+03:00"},
+        )
+    )
+
+    assert updated.scheduled_at == original_scheduled_at
+    assert updated.status is ReminderStatus.SNOOZED
+    assert updated.repeat_count == 2
+    assert updated.next_trigger == datetime(2026, 7, 20, 18, 12, tzinfo=UTC)
+
+
 def test_completing_once_deletes_reminder_after_persisting_event_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -272,6 +346,9 @@ def test_completing_once_deletes_reminder_after_persisting_event_data(
     assert manager.hass.bus.events[0][0] == EVENT_COMPLETED
     assert manager.hass.bus.events[0][1]["text"] == "Completed text"
     assert manager.hass.bus.events[0][1]["reminder_id"] == reminder.id
+    assert manager.hass.bus.events[0][1]["next_trigger"] is None
+    assert manager.hass.bus.events[0][1]["action_succeeded"] is True
+    assert manager.hass.bus.events[0][1]["reason"] is None
     assert manager._store.saved[-1]["reminders"] == []
 
 
@@ -315,3 +392,77 @@ def test_completing_after_completion_schedules_from_actual_completion(
     assert reminder.status is ReminderStatus.SCHEDULED
     assert reminder.next_trigger == NOW + timedelta(days=1)
     assert reminder.id in manager.reminders
+    assert (
+        manager.hass.bus.events[0][1]["next_trigger"]
+        == (NOW + timedelta(days=1)).isoformat()
+    )
+
+
+def test_repeated_completion_does_not_schedule_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(manager_module, "utcnow", lambda: NOW)
+    reminder = Reminder.from_payload(
+        reminder_payload(reminder_type="after_completion", delay_minutes=1440),
+        now=NOW - timedelta(days=1),
+        local_tz=ZoneInfo("UTC"),
+    )
+    reminder.status = ReminderStatus.ACTIVE
+    manager = lifecycle_manager(reminder)
+
+    asyncio.run(manager.async_complete(reminder.id))
+    first_next_trigger = reminder.next_trigger
+    first_completed_at = reminder.last_completed_at
+    asyncio.run(manager.async_complete(reminder.id))
+
+    assert reminder.status is ReminderStatus.SCHEDULED
+    assert reminder.next_trigger == first_next_trigger
+    assert reminder.last_completed_at == first_completed_at
+    assert len(manager._store.saved) == 1
+    event_type, event_data = manager.hass.bus.events[-1]
+    assert event_type == EVENT_COMPLETED
+    assert event_data["text"] == "Custom already completed error"
+    assert event_data["next_trigger"] == first_next_trigger.isoformat()
+    assert event_data["action_succeeded"] is False
+    assert event_data["reason"] == "already_completed"
+
+
+def test_repeated_completion_is_rejected_even_if_next_trigger_is_due(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A delayed scheduler callback must not make the old button valid again."""
+    monkeypatch.setattr(manager_module, "utcnow", lambda: NOW)
+    reminder = Reminder.from_payload(
+        reminder_payload(reminder_type="after_completion", delay_minutes=1440),
+        now=NOW - timedelta(days=2),
+        local_tz=ZoneInfo("UTC"),
+    )
+    reminder.status = ReminderStatus.SCHEDULED
+    reminder.last_completed_at = NOW - timedelta(days=1)
+    reminder.next_trigger = NOW - timedelta(minutes=1)
+    manager = lifecycle_manager(reminder)
+
+    asyncio.run(manager.async_complete(reminder.id))
+
+    assert reminder.next_trigger == NOW - timedelta(minutes=1)
+    assert manager._store.saved == []
+    assert manager.hass.bus.events[-1][1]["reason"] == "already_completed"
+
+
+def test_fresh_scheduled_reminder_can_be_completed_before_first_trigger(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(manager_module, "utcnow", lambda: NOW)
+    reminder = Reminder.from_payload(
+        reminder_payload(reminder_type="after_completion", delay_minutes=1440),
+        now=NOW,
+        local_tz=ZoneInfo("UTC"),
+    )
+    assert reminder.last_completed_at is None
+    manager = lifecycle_manager(reminder)
+
+    asyncio.run(manager.async_complete(reminder.id))
+
+    assert reminder.last_completed_at == NOW
+    assert reminder.next_trigger == NOW + timedelta(days=1)
+    assert manager.hass.bus.events[-1][1]["action_succeeded"] is True

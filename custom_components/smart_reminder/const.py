@@ -15,8 +15,12 @@ PLATFORMS: Final = [Platform.SENSOR, Platform.BUTTON, Platform.SWITCH]
 
 CONF_DND_START: Final = "dnd_start"
 CONF_DND_END: Final = "dnd_end"
+CONF_ALREADY_SNOOZED_ERROR_TEXT: Final = "already_snoozed_error_text"
+CONF_ALREADY_COMPLETED_ERROR_TEXT: Final = "already_completed_error_text"
 DEFAULT_DND_START: Final = "23:00:00"
 DEFAULT_DND_END: Final = "10:00:00"
+DEFAULT_ALREADY_SNOOZED_ERROR_TEXT: Final = "⚠️ Ошибка. Напоминание уже отложено"
+DEFAULT_ALREADY_COMPLETED_ERROR_TEXT: Final = "⚠️ Ошибка. Напоминание уже завершено"
 
 PANEL_URL_PATH: Final = "smart-reminders"
 PANEL_WEB_COMPONENT: Final = "smart-reminder-panel"

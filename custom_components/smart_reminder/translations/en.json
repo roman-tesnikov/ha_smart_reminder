@@ -4,10 +4,12 @@
     "step": {
       "user": {
         "title": "Set up Smart Reminder",
-        "description": "Configure the global Do Not Disturb period. Reminders can individually ignore it.",
+        "description": "Configure the global Do Not Disturb period and responses to repeated actions. Reminders can individually ignore DnD.",
         "data": {
           "dnd_start": "Do Not Disturb starts",
-          "dnd_end": "Do Not Disturb ends"
+          "dnd_end": "Do Not Disturb ends",
+          "already_snoozed_error_text": "Error text for an already snoozed reminder",
+          "already_completed_error_text": "Error text for an already completed reminder"
         }
       }
     },
@@ -19,10 +21,12 @@
     "step": {
       "init": {
         "title": "Smart Reminder settings",
-        "description": "Reminders due during this period are postponed until the period ends, unless Ignore DnD is enabled for that reminder. Equal start and end times disable DnD.",
+        "description": "Reminders due during this period are postponed until the period ends, unless Ignore DnD is enabled for that reminder. Equal start and end times disable DnD. Error texts are returned by repeated action events.",
         "data": {
           "dnd_start": "Do Not Disturb starts",
-          "dnd_end": "Do Not Disturb ends"
+          "dnd_end": "Do Not Disturb ends",
+          "already_snoozed_error_text": "Error text for an already snoozed reminder",
+          "already_completed_error_text": "Error text for an already completed reminder"
         }
       }
     }

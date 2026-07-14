@@ -18,8 +18,12 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_ALREADY_COMPLETED_ERROR_TEXT,
+    CONF_ALREADY_SNOOZED_ERROR_TEXT,
     CONF_DND_END,
     CONF_DND_START,
+    DEFAULT_ALREADY_COMPLETED_ERROR_TEXT,
+    DEFAULT_ALREADY_SNOOZED_ERROR_TEXT,
     DEFAULT_DND_END,
     DEFAULT_DND_START,
     EVENT_COMPLETED,
@@ -38,6 +42,7 @@ from .model import (
     datetime_to_iso,
     minutes_to_duration,
     next_cron_occurrence,
+    parse_datetime,
     parse_duration,
     utcnow,
     validate_reminder_id,
@@ -103,6 +108,21 @@ class ReminderManager:
     def _apply_options(self, options: dict[str, Any]) -> None:
         self._dnd_start = _parse_clock(options.get(CONF_DND_START), DEFAULT_DND_START)
         self._dnd_end = _parse_clock(options.get(CONF_DND_END), DEFAULT_DND_END)
+        self._already_snoozed_error_text = self._message_template(
+            options.get(CONF_ALREADY_SNOOZED_ERROR_TEXT),
+            DEFAULT_ALREADY_SNOOZED_ERROR_TEXT,
+        )
+        self._already_completed_error_text = self._message_template(
+            options.get(CONF_ALREADY_COMPLETED_ERROR_TEXT),
+            DEFAULT_ALREADY_COMPLETED_ERROR_TEXT,
+        )
+
+    @staticmethod
+    def _message_template(value: Any, default: str) -> str:
+        """Return a configured lifecycle response or its non-empty default."""
+        if not isinstance(value, str) or not (value := value.strip()):
+            return default
+        return value
 
     async def async_load(self) -> None:
         """Load reminders from Home Assistant storage."""
@@ -205,6 +225,13 @@ class ReminderManager:
             current = self.get(validate_reminder_id(reminder_id))
             normalized_payload = dict(payload)
             normalized_payload["id"] = current.id
+            requested_next_trigger = None
+            if "next_trigger" in normalized_payload:
+                requested_next_trigger = parse_datetime(
+                    normalized_payload.pop("next_trigger"),
+                    self.time_zone,
+                    "next_trigger",
+                )
             updated = Reminder.from_payload(
                 normalized_payload, now=utcnow(), local_tz=self.time_zone
             )
@@ -215,6 +242,8 @@ class ReminderManager:
                 updated.last_triggered_at = current.last_triggered_at
                 updated.last_completed_at = current.last_completed_at
                 updated.repeat_count = current.repeat_count
+            if requested_next_trigger is not None:
+                updated.next_trigger = requested_next_trigger
             self.reminders[current.id] = updated
             await self._async_save()
             self._notify_updated()
@@ -251,19 +280,28 @@ class ReminderManager:
         async with self._lock:
             reminder = self.get(validate_reminder_id(reminder_id))
             previous_trigger = reminder.next_trigger
-            reminder.status = ReminderStatus.SNOOZED
-            reminder.next_trigger = now + delta
-            await self._async_save()
+            already_snoozed = reminder.status is ReminderStatus.SNOOZED
+            if not already_snoozed:
+                reminder.status = ReminderStatus.SNOOZED
+                reminder.next_trigger = now + delta
+                await self._async_save()
             event_data = self._event_data(
                 reminder,
-                text=reminder.snoozed_text,
+                text=(
+                    self._already_snoozed_error_text
+                    if already_snoozed
+                    else reminder.snoozed_text
+                ),
                 occurred_at=now,
-                scheduled_for=previous_trigger,
+                scheduled_for=None if already_snoozed else previous_trigger,
             )
             event_data["duration"] = duration.strip().lower()
             event_data["snoozed_until"] = datetime_to_iso(reminder.next_trigger)
-            self._notify_updated()
-            self._arm_timer()
+            event_data["action_succeeded"] = not already_snoozed
+            event_data["reason"] = "already_snoozed" if already_snoozed else None
+            if not already_snoozed:
+                self._notify_updated()
+                self._arm_timer()
         self.hass.bus.async_fire(EVENT_SNOOZED, event_data)
         return reminder
 
@@ -272,35 +310,47 @@ class ReminderManager:
         now = utcnow()
         async with self._lock:
             reminder = self.get(validate_reminder_id(reminder_id))
-            reminder.last_completed_at = now
-            reminder.repeat_count = 0
-            if reminder.reminder_type is ReminderType.ONCE:
-                reminder.next_trigger = None
-            elif reminder.reminder_type is ReminderType.CRON:
-                reminder.status = ReminderStatus.SCHEDULED
-                reminder.next_trigger = next_cron_occurrence(
-                    reminder.cron or "",
-                    now,
-                    self.time_zone,
-                    reminder.cron_anchor,
-                )
-            else:
-                reminder.status = ReminderStatus.SCHEDULED
-                reminder.next_trigger = now + timedelta(
-                    minutes=reminder.delay_minutes or 1
-                )
+            already_completed = (
+                reminder.status is ReminderStatus.SCHEDULED
+                and reminder.last_completed_at is not None
+            )
+            if not already_completed:
+                reminder.last_completed_at = now
+                reminder.repeat_count = 0
+                if reminder.reminder_type is ReminderType.ONCE:
+                    reminder.next_trigger = None
+                elif reminder.reminder_type is ReminderType.CRON:
+                    reminder.status = ReminderStatus.SCHEDULED
+                    reminder.next_trigger = next_cron_occurrence(
+                        reminder.cron or "",
+                        now,
+                        self.time_zone,
+                        reminder.cron_anchor,
+                    )
+                else:
+                    reminder.status = ReminderStatus.SCHEDULED
+                    reminder.next_trigger = now + timedelta(
+                        minutes=reminder.delay_minutes or 1
+                    )
 
             event_data = self._event_data(
                 reminder,
-                text=reminder.completed_text,
+                text=(
+                    self._already_completed_error_text
+                    if already_completed
+                    else reminder.completed_text
+                ),
                 occurred_at=now,
                 scheduled_for=None,
             )
-            if reminder.reminder_type is ReminderType.ONCE:
-                del self.reminders[reminder.id]
-            await self._async_save()
-            self._notify_updated()
-            self._arm_timer()
+            event_data["action_succeeded"] = not already_completed
+            event_data["reason"] = "already_completed" if already_completed else None
+            if not already_completed:
+                if reminder.reminder_type is ReminderType.ONCE:
+                    del self.reminders[reminder.id]
+                await self._async_save()
+                self._notify_updated()
+                self._arm_timer()
         self.hass.bus.async_fire(EVENT_COMPLETED, event_data)
         return reminder
 

@@ -20,6 +20,8 @@ class SmartReminderPanel extends HTMLElement {
     this._reminders = [];
     this._settings = {};
     this._editingId = null;
+    this._editingReminder = null;
+    this._initialNextTrigger = null;
   }
 
   set hass(value) {
@@ -298,13 +300,21 @@ class SmartReminderPanel extends HTMLElement {
                 <option value="after_completion">С задержкой после выполнения</option>
               </select>
             </div>
-            <div class="field conditional" data-for="datetime">
+            <div class="field conditional" data-for="scheduled-datetime">
               <label for="scheduled-date">Дата и время первого запуска</label>
               <div class="datetime-fields">
                 <input id="scheduled-date" name="scheduled_date" inputmode="numeric" maxlength="10" pattern="[0-9]{2}\\.[0-9]{2}\\.[0-9]{4}" placeholder="ДД.ММ.ГГГГ" aria-label="Дата первого запуска">
                 <input id="scheduled-time" name="scheduled_time" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="ЧЧ:ММ" aria-label="Время первого запуска">
               </div>
               <span class="hint" id="timezone-hint"></span>
+            </div>
+            <div class="field conditional" data-for="next-datetime" hidden>
+              <label for="next-trigger-date">Дата и время следующего запуска</label>
+              <div class="datetime-fields">
+                <input id="next-trigger-date" name="next_trigger_date" inputmode="numeric" maxlength="10" pattern="[0-9]{2}\\.[0-9]{2}\\.[0-9]{4}" placeholder="ДД.ММ.ГГГГ" aria-label="Дата следующего запуска">
+                <input id="next-trigger-time" name="next_trigger_time" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="ЧЧ:ММ" aria-label="Время следующего запуска">
+              </div>
+              <span class="hint" id="next-timezone-hint"></span>
             </div>
             <div class="field conditional" data-for="cron" hidden>
               <label for="cron">Crontab</label>
@@ -489,6 +499,7 @@ class SmartReminderPanel extends HTMLElement {
     const form = this.shadowRoot.getElementById("form");
     form.reset();
     this._editingId = reminder && reminder.id;
+    this._editingReminder = reminder;
     this.shadowRoot.getElementById("dialog-title").textContent = reminder ? "Редактирование" : "Новое напоминание";
     const idInput = this.shadowRoot.getElementById("id");
     idInput.disabled = Boolean(reminder);
@@ -500,6 +511,14 @@ class SmartReminderPanel extends HTMLElement {
     );
     this.shadowRoot.getElementById("scheduled-date").value = scheduled.date;
     this.shadowRoot.getElementById("scheduled-time").value = scheduled.time;
+    const nextTrigger = this._formatForForm(
+      reminder && (reminder.next_trigger || reminder.scheduled_at)
+        ? reminder.next_trigger || reminder.scheduled_at
+        : new Date(Date.now() + 3600000).toISOString(),
+    );
+    this.shadowRoot.getElementById("next-trigger-date").value = nextTrigger.date;
+    this.shadowRoot.getElementById("next-trigger-time").value = nextTrigger.time;
+    this._initialNextTrigger = { ...nextTrigger };
     this.shadowRoot.getElementById("cron").value = reminder && reminder.cron ? reminder.cron : "0 10 * * 1";
     this.shadowRoot.getElementById("cron-anchor-date").value = reminder && reminder.cron_anchor
       ? this._formatDateOnly(reminder.cron_anchor)
@@ -515,6 +534,7 @@ class SmartReminderPanel extends HTMLElement {
     this.shadowRoot.getElementById("completed-text").value = reminder ? reminder.completed_text || "" : "";
     this.shadowRoot.getElementById("recipients").value = reminder ? (reminder.recipient_ids || []).join("\n") : "";
     this.shadowRoot.getElementById("timezone-hint").textContent = `Часовой пояс: ${this._settings.timezone || "Home Assistant"}`;
+    this.shadowRoot.getElementById("next-timezone-hint").textContent = `Часовой пояс: ${this._settings.timezone || "Home Assistant"}`;
     this.shadowRoot.getElementById("form-error").textContent = "";
     this._updateConditionalFields();
     this.shadowRoot.getElementById("editor").showModal();
@@ -523,26 +543,34 @@ class SmartReminderPanel extends HTMLElement {
   _closeEditor() {
     this.shadowRoot.getElementById("editor").close();
     this._editingId = null;
+    this._editingReminder = null;
+    this._initialNextTrigger = null;
   }
 
   _updateConditionalFields() {
     const type = this.shadowRoot.getElementById("type").value;
-    this.shadowRoot.querySelectorAll('[data-for="datetime"]').forEach((element) => {
-      element.hidden = type === "cron";
-    });
+    const editing = Boolean(this._editingId);
+    this.shadowRoot.querySelector('[data-for="scheduled-datetime"]').hidden = editing || type === "cron";
+    this.shadowRoot.querySelector('[data-for="next-datetime"]').hidden = !editing;
     this.shadowRoot.querySelectorAll('[data-for="cron"]').forEach((element) => {
       element.hidden = type !== "cron";
     });
     this.shadowRoot.querySelector('[data-for="delay"]').hidden = type !== "after_completion";
     const scheduledDate = this.shadowRoot.getElementById("scheduled-date");
     const scheduledTime = this.shadowRoot.getElementById("scheduled-time");
+    const nextTriggerDate = this.shadowRoot.getElementById("next-trigger-date");
+    const nextTriggerTime = this.shadowRoot.getElementById("next-trigger-time");
     const cron = this.shadowRoot.getElementById("cron");
     const cronAnchor = this.shadowRoot.getElementById("cron-anchor-date");
     const delay = this.shadowRoot.getElementById("delay");
-    scheduledDate.required = type !== "cron";
-    scheduledDate.disabled = type === "cron";
-    scheduledTime.required = type !== "cron";
-    scheduledTime.disabled = type === "cron";
+    scheduledDate.required = !editing && type !== "cron";
+    scheduledDate.disabled = editing || type === "cron";
+    scheduledTime.required = !editing && type !== "cron";
+    scheduledTime.disabled = editing || type === "cron";
+    nextTriggerDate.required = editing;
+    nextTriggerDate.disabled = !editing;
+    nextTriggerTime.required = editing;
+    nextTriggerTime.disabled = !editing;
     cron.required = type === "cron";
     cron.disabled = type !== "cron";
     cronAnchor.disabled = type !== "cron";
@@ -558,13 +586,24 @@ class SmartReminderPanel extends HTMLElement {
     const error = this.shadowRoot.getElementById("form-error");
     error.textContent = "";
     let scheduledAt = null;
+    let nextTrigger = null;
     let cronAnchor = null;
     try {
-      if (type !== "cron") {
+      if (this._editingId) {
+        nextTrigger = this._parseDateTime(
+          form.elements.next_trigger_date.value,
+          form.elements.next_trigger_time.value,
+        );
+      }
+      if (!this._editingId && type !== "cron") {
         scheduledAt = this._parseDateTime(
           form.elements.scheduled_date.value,
           form.elements.scheduled_time.value,
         );
+      } else if (this._editingId && type !== "cron") {
+        scheduledAt = this._editingReminder.reminder_type === type
+          ? this._editingReminder.scheduled_at || nextTrigger
+          : nextTrigger;
       }
       if (type === "cron" && form.elements.cron_anchor_date.value.trim()) {
         cronAnchor = this._parseDate(form.elements.cron_anchor_date.value);
@@ -595,6 +634,15 @@ class SmartReminderPanel extends HTMLElement {
       completed_text: form.elements.completed_text.value.trim(),
       recipient_ids: recipients,
     };
+    if (
+      this._editingId
+      && (
+        form.elements.next_trigger_date.value !== this._initialNextTrigger.date
+        || form.elements.next_trigger_time.value !== this._initialNextTrigger.time
+      )
+    ) {
+      reminder.next_trigger = nextTrigger;
+    }
     const save = this.shadowRoot.getElementById("save");
     save.disabled = true;
     try {
